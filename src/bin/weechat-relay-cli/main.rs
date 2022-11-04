@@ -103,7 +103,7 @@ fn main() {
     let mut responses = 0;
 
     if let Some(handshake) = cli.handshake {
-        let handshake = handshake.unwrap_or_else(|| "".to_string());
+        let handshake = handshake.unwrap_or_default();
         let command = parse_handshake_command(&handshake).unwrap().0.unwrap();
         let command = DynCommand { id: None, command };
         commands.push(command);
