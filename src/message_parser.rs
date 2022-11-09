@@ -255,9 +255,8 @@ where
 {
     let (i, id) = parse_buffer(i)?;
 
-    let id = match id {
-        Some(id) => id,
-        None => return Ok((i, Identifier::Client(vec![]))),
+    let Some(id) = id else {
+        return Ok((i, Identifier::Client(vec![])));
     };
     let id = id.as_bytes();
     let id = if !id.is_empty() && id[0] == b'_' {
