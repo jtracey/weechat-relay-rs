@@ -514,7 +514,5 @@ pub fn to_hashmap<K, V>(keys: Vec<K>, vals: Vec<V>) -> HashMap<K, V>
 where
     K: Eq + std::hash::Hash,
 {
-    keys.into_iter()
-        .zip(vals.into_iter())
-        .collect::<HashMap<K, V>>()
+    keys.into_iter().zip(vals).collect::<HashMap<K, V>>()
 }

@@ -1,5 +1,7 @@
 pub use crate::basic_types::{Compression, PasswordHashAlgo, Pointer};
 
+use std::fmt::Write;
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum WeechatError {
     NewlineInArgument,
@@ -659,21 +661,21 @@ pub enum PasswordHash {
     },
 }
 
-fn print_bytes(bytes: &[u8]) -> String {
-    bytes
-        .iter()
-        .map(|b| format!("{:02x}", b))
-        .collect::<String>()
+fn hex_encode(bytes: &[u8]) -> String {
+    bytes.iter().fold(String::new(), |mut output, b| {
+        let _ = write!(output, "{b:02x}");
+        output
+    })
 }
 
 impl std::fmt::Display for PasswordHash {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             PasswordHash::Sha256 { salt, hash } => {
-                write!(f, "sha256:{}:{}", print_bytes(salt), print_bytes(hash))
+                write!(f, "sha256:{}:{}", hex_encode(salt), hex_encode(hash))
             }
             PasswordHash::Sha512 { salt, hash } => {
-                write!(f, "sha512:{}:{}", print_bytes(salt), print_bytes(hash))
+                write!(f, "sha512:{}:{}", hex_encode(salt), hex_encode(hash))
             }
             PasswordHash::Pbkdf2Sha256 {
                 salt,
@@ -682,9 +684,9 @@ impl std::fmt::Display for PasswordHash {
             } => write!(
                 f,
                 "pbkdf2+sha256:{}:{}:{}",
-                print_bytes(salt),
+                hex_encode(salt),
                 iterations,
-                print_bytes(hash)
+                hex_encode(hash)
             ),
             PasswordHash::Pbkdf2Sha512 {
                 salt,
@@ -693,9 +695,9 @@ impl std::fmt::Display for PasswordHash {
             } => write!(
                 f,
                 "pbkdf2+sha512:{}:{}:{}",
-                print_bytes(salt),
+                hex_encode(salt),
                 iterations,
-                print_bytes(hash)
+                hex_encode(hash)
             ),
         }
     }
