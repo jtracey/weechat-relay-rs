@@ -782,7 +782,7 @@ mod tests {
 
     #[test]
     fn chr_parsing() {
-        let bytes = vec![b'A'];
+        let bytes = [b'A'];
         let res: IResult<_, _> = parser_for!(Chr)(&bytes[..]);
         let c = res.unwrap().1;
         assert_eq!(c, b'A' as i8);
@@ -790,12 +790,12 @@ mod tests {
 
     #[test]
     fn int_parsing() {
-        let bytes = vec![0x00, 0x01, 0xE2, 0x40];
+        let bytes = [0x00, 0x01, 0xE2, 0x40];
         let res: IResult<_, _> = parser_for!(Int)(&bytes[..]);
         let i = res.unwrap().1;
         assert_eq!(i, 123456);
 
-        let bytes = vec![0xFF, 0xFE, 0x1D, 0xC0];
+        let bytes = [0xFF, 0xFE, 0x1D, 0xC0];
         let res: IResult<_, _> = parser_for!(Int)(&bytes[..]);
         let i = res.unwrap().1;
         assert_eq!(i, -123456);
@@ -803,14 +803,14 @@ mod tests {
 
     #[test]
     fn lon_parsing() {
-        let bytes = vec![
+        let bytes = [
             0x0A, b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9', b'0',
         ];
         let res: IResult<_, _> = parser_for!(Lon)(&bytes[..]);
         let i = res.unwrap().1;
         assert_eq!(i, 1234567890);
 
-        let bytes = vec![
+        let bytes = [
             0x0B, b'-', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9', b'0',
         ];
         let res: IResult<_, _> = parser_for!(Lon)(&bytes[..]);
@@ -820,17 +820,17 @@ mod tests {
 
     #[test]
     fn str_parsing() {
-        let bytes = vec![0x00, 0x00, 0x00, 0x05, b'h', b'e', b'l', b'l', b'o'];
+        let bytes = [0x00, 0x00, 0x00, 0x05, b'h', b'e', b'l', b'l', b'o'];
         let res: IResult<_, _> = parser_for!(Str)(&bytes[..]);
         let s = res.unwrap().1;
         assert_eq!(s, WString::new(Some(b"hello".to_vec())));
 
-        let bytes = vec![0x00, 0x00, 0x00, 0x00];
+        let bytes = [0x00, 0x00, 0x00, 0x00];
         let res: IResult<_, _> = parser_for!(Str)(&bytes[..]);
         let s = res.unwrap().1;
         assert_eq!(s, WString::new(Some(b"".to_vec())));
 
-        let bytes = vec![0xFF, 0xFF, 0xFF, 0xFF];
+        let bytes = [0xFF, 0xFF, 0xFF, 0xFF];
         let res: IResult<_, _> = parser_for!(Str)(&bytes[..]);
         let s = res.unwrap().1;
         assert_eq!(s, WString::new(None));
@@ -838,12 +838,12 @@ mod tests {
 
     #[test]
     fn buf_parsing() {
-        let bytes = vec![0x00, 0x00, 0x00, 0x06, b'b', b'u', b'f', b'f', b'e', b'r'];
+        let bytes = [0x00, 0x00, 0x00, 0x06, b'b', b'u', b'f', b'f', b'e', b'r'];
         let res: IResult<_, _> = parser_for!(Buf)(&bytes[..]);
         let b = res.unwrap().1;
         assert_eq!(b, Some(b"buffer".to_vec()));
 
-        let bytes = vec![0xFF, 0xFF, 0xFF, 0xFF];
+        let bytes = [0xFF, 0xFF, 0xFF, 0xFF];
         let res: IResult<_, _> = parser_for!(Buf)(&bytes[..]);
         let b = res.unwrap().1;
         assert_eq!(b, None);
@@ -851,12 +851,12 @@ mod tests {
 
     #[test]
     fn ptr_parsing() {
-        let bytes = vec![0x09, b'1', b'a', b'2', b'b', b'3', b'c', b'4', b'd', b'5'];
+        let bytes = [0x09, b'1', b'a', b'2', b'b', b'3', b'c', b'4', b'd', b'5'];
         let res: IResult<_, _> = parser_for!(Ptr)(&bytes[..]);
         let p = res.unwrap().1;
         assert_eq!(p, Pointer::new(b"1a2b3c4d5".to_vec()).unwrap());
 
-        let bytes = vec![0x01, b'0'];
+        let bytes = [0x01, b'0'];
         let res: IResult<_, _> = parser_for!(Ptr)(&bytes[..]);
         let p = res.unwrap().1;
         assert_eq!(p, Pointer::new(b"0".to_vec()).unwrap());
@@ -864,7 +864,7 @@ mod tests {
 
     #[test]
     fn tim_parsing() {
-        let bytes = vec![
+        let bytes = [
             0x0A, b'1', b'3', b'2', b'1', b'9', b'9', b'3', b'4', b'5', b'6',
         ];
         let res: IResult<_, _> = parser_for!(Tim)(&bytes[..]);
@@ -874,7 +874,7 @@ mod tests {
 
     #[test]
     fn arr_parsing() {
-        let bytes = vec![
+        let bytes = [
             b's', b't', b'r', // array type
             0x00, 0x00, 0x00, 0x02, // array length
             0x00, 0x00, 0x00, 0x03, b'a', b'b', b'c', // element 1
@@ -890,7 +890,7 @@ mod tests {
             ])
         );
 
-        let bytes = vec![
+        let bytes = [
             b'i', b'n', b't', 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x7B, 0x00, 0x00, 0x01,
             0xC8, 0x00, 0x00, 0x03, 0x15,
         ];
@@ -898,7 +898,7 @@ mod tests {
         let a = res.unwrap().1;
         assert_eq!(a, WArray::Int(vec![123, 456, 789]));
 
-        let bytes = vec![b's', b't', b'r', 0x00, 0x00, 0x00, 0x00];
+        let bytes = [b's', b't', b'r', 0x00, 0x00, 0x00, 0x00];
         let res: IResult<_, _> = parser_for!(Arr)(&bytes[..]);
         let a = res.unwrap().1;
         assert_eq!(a, WArray::Str(vec![]));
@@ -906,7 +906,7 @@ mod tests {
 
     #[test]
     fn hashtable_parsing() {
-        let bytes = vec![
+        let bytes = [
             b's', b't', b'r', // key type
             b's', b't', b'r', // val type
             0x00, 0x00, 0x00, 0x02, // number of key-val pairs
@@ -934,7 +934,7 @@ mod tests {
 
     #[test]
     fn hdata_parsing() {
-        let bytes = vec![
+        let bytes = [
             0x00, 0x00, 0x00, 0x06, // h-path length
             b'b', b'u', b'f', b'f', b'e', b'r', // h-path
             0x00, 0x00, 0x00, 0x18, // full keys length
@@ -981,7 +981,7 @@ mod tests {
 
         // FIXME: there are two more complicated hdatas in the proto docs to test
 
-        let bytes = vec![
+        let bytes = [
             0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00,
         ];
         let res: IResult<_, _> = parser_for!(Hda)(&bytes[..]);
@@ -998,7 +998,7 @@ mod tests {
 
     #[test]
     fn info_parsing() {
-        let bytes = vec![
+        let bytes = [
             0x00, 0x00, 0x00, 0x07, b'v', b'e', b'r', b's', b'i', b'o', b'n', // name
             0x00, 0x00, 0x00, 0x11, b'W', b'e', b'e', b'C', b'h', b'a', b't', b' ', b'0', b'.',
             b'3', b'.', b'7', b'-', b'd', b'e', b'v', //value
@@ -1016,7 +1016,7 @@ mod tests {
 
     #[test]
     fn infolist_parsing() {
-        let bytes = vec![
+        let bytes = [
             0x00, 0x00, 0x00, 0x06, b'b', b'u', b'f', b'f', b'e', b'r', // name
             0x00, 0x00, 0x00, 0x02, // count
             0x00, 0x00, 0x00, 0x01, // item 1 count
@@ -1056,7 +1056,7 @@ mod tests {
 
     #[test]
     fn compression_parsing() {
-        let bytes = vec![0_u8];
+        let bytes = [0_u8];
         let res: IResult<_, _> = parse_compression(&bytes[..]);
         let c = res.unwrap().1;
         assert_eq!(c, Compression::Off);
@@ -1064,12 +1064,12 @@ mod tests {
 
     #[test]
     fn identifier_parsing() {
-        let bytes = vec![0x00, 0x00, 0x00, 0x03, b'f', b'o', b'o'];
+        let bytes = [0x00, 0x00, 0x00, 0x03, b'f', b'o', b'o'];
         let res: IResult<_, _> = parse_identifier(&bytes[..]);
         let i = res.unwrap().1;
         assert_eq!(i, Identifier::Client(b"foo".to_vec()));
 
-        let bytes = vec![0x00, 0x00, 0x00, 0x05, b'_', b'p', b'o', b'n', b'g'];
+        let bytes = [0x00, 0x00, 0x00, 0x05, b'_', b'p', b'o', b'n', b'g'];
         let res: IResult<_, _> = parse_identifier(&bytes[..]);
         let i = res.unwrap().1;
         assert_eq!(i, Identifier::Event(Event::Pong));
@@ -1077,7 +1077,7 @@ mod tests {
 
     #[test]
     fn message_parsing() {
-        let bytes = vec![
+        let bytes = [
             0x00, // compression
             0x00, 0x00, 0x00, 0x00, // id length
             b'c', b'h', b'r', // type 1
