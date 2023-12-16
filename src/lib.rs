@@ -1,4 +1,6 @@
-//! weechat-relay-rs is a pure-Rust library for interfacing with a [WeeChat Relay](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html), including sending commands and receiving messages.
+//! weechat-relay-rs is a pure-Rust library for interfacing with a
+//! [WeeChat Relay](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html),
+//! including sending commands and receiving messages.
 
 pub mod basic_types;
 pub mod commands;

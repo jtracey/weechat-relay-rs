@@ -282,7 +282,7 @@ where
             b"_upgrade" => Identifier::Event(Event::Upgrade),
             b"_upgrade_ended" => Identifier::Event(Event::UpgradeEnded),
             _ => {
-                eprintln!("weechat-relay-rs: Unrecognized reserved idenitifier (handling as client identifier): {}", String::from_utf8_lossy(id));
+                eprintln!("weechat-relay-rs: Unrecognized reserved identifier (handling as client identifier): {}", String::from_utf8_lossy(id));
                 Identifier::Client(id.to_vec())
             }
         }
@@ -421,16 +421,17 @@ where
 
 /*
 === Hashtable parsing ===
-Hashtables end up being one of the harder things to parse, because they come as m copies of
-(a priori unknown) two types, interleaved with each other. We lean on generics where we can, but
+
+Hashtables end up being one of the harder things to parse, because they come as m copies of (a
+priori unknown) two types, interleaved with each other. We lean on generics where we can, but
 ultimately, we have to pass something back to a consumer who doesn't know those types, which means
 an enum that somehow conveys |{ObjectType}|**2 possible variants. The consumer representation of
-this is solved by being a struct with two memebers, each of which is a WArray (a vec of pairs may
+this is solved by being a struct with two members, each of which is a WArray (a vec of pairs may
 seem more natural, but would require generics in the type, which again, we can't use; or enums,
 which lose the type consistency). Here though, we still need to somehow call the correct generic
-function, and force the result into this format. This means |{ObjectType}|**2 calls we need to
-match against, which is... unweidly. To make the best of it, we rely on macros that generate
-nested match statements. For details, see the code itself.
+function, and force the result into this format. This means |{ObjectType}|**2 calls we need to match
+against, which is... unwieldy. To make the best of it, we rely on macros that generate nested match
+statements. For details, see the code itself.
 */
 
 fn apply_hashtable_parsers<I, E, M, N>(

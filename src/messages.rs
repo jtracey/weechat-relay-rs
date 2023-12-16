@@ -1,7 +1,7 @@
 pub use crate::basic_types::{Compression, PasswordHashAlgo, Pointer};
 use std::collections::HashMap;
 
-/// A message recieved from WeeChat.
+/// A message received from WeeChat.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Message {
     pub id: Identifier,
@@ -9,7 +9,8 @@ pub struct Message {
 }
 
 impl Message {
-    /// Constructor for a new `Message`. You are unlikely to need to call this directly, typically a message is created via parser.
+    /// Constructor for a new `Message`. You are unlikely to need to call this directly, typically a
+    /// message is created via parser.
     pub fn new(id: Identifier, objects: Vec<Object>) -> Self {
         Self { id, objects }
     }
@@ -24,18 +25,23 @@ pub trait MessageType {
         Self: Sized;
 }
 
-/// A WeeChat [Char](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#object_char).
-/// Note that WeeChat Char types are signed.
+/// A WeeChat
+/// [Char](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#object_char). Note
+/// that WeeChat Char types are signed.
 pub type WChar = i8;
-/// A WeeChat [Integer](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#object_integer).
+/// A WeeChat
+/// [Integer](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#object_integer).
 pub type WInteger = i32;
-/// A WeeChat [Long integer](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#object_long_integer).
+/// A WeeChat [Long
+/// integer](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#object_long_integer).
 pub type WLongInteger = i64;
-/// A WeeChat [String](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#object_string).
+/// A WeeChat
+/// [String](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#object_string).
 ///
-/// This type would be identical to the [WBuffer] type, except that it is intended to be a human-readable string.
-/// It is not just a Rust String because there is no way, at the protocol level, to know what the encoding of the string is (it is the job of the application to know this).
-///  The `None` variant represents a `NULL` string.
+/// This type would be identical to the [`WBuffer`] type, except that it is intended to be a
+/// human-readable string.  It is not just a Rust String because there is no way, at the protocol
+/// level, to know what the encoding of the string is (it is the job of the application to know
+/// this). The `None` variant represents a `NULL` string.
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct WString {
     bytes: Option<Vec<u8>>,
@@ -52,22 +58,27 @@ impl WString {
     }
 }
 
-/// A WeeChat [Buffer](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#object_buffer).
-///  The `None` variant represents a `NULL` buffer.
+/// A WeeChat
+/// [Buffer](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#object_buffer). The
+/// `None` variant represents a `NULL` buffer.
 pub type WBuffer = Option<Vec<u8>>;
-/// A WeeChat [Time](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#object_time) (i.e., number of seconds).
+/// A WeeChat [Time](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#object_time)
+/// (i.e., number of seconds).
 pub type WTime = u64;
 
-/** A WeeChat [Hashtable](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#object_hashtable).
+/** A WeeChat
+[Hashtable](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#object_hashtable).
 
-  Why is this not just a HashMap?
-While we do provide a [function to create a true HashMap](to_hashmap) from this object, we do not use one by
-default because the spec is underspecified as to how valid such a transformation is. Namely, the
-spec does not detail whether it is valid for a hashtable to contain multiple instances of the same
-key, or whether ordering is/can be significant. While the answer is almost certainly "keys cannot
-be duplicated and ordering is not significant", as is the case in Rust's HashMap (so you probably
-almost always want to convert this immediately), it's possible that custom extensions could violate
-these assumptions without violating the spec, so we opt to defer to the safer interpretation.
+Why is this not just a [`HashMap`]?
+
+While we do provide a [function to create a true `HashMap`](to_hashmap) from this object, we do not
+use one by default because the spec is under-specified as to how valid such a transformation
+is. Namely, the spec does not detail whether it is valid for a hashtable to contain multiple
+instances of the same key, or whether ordering is/can be significant. While the answer is almost
+certainly "keys cannot be duplicated and ordering is not significant", as is the case in Rust's
+`HashMap` (so you probably almost always want to convert this immediately), it's possible that
+custom extensions could violate these assumptions without violating the spec, so we opt to defer to
+the safer interpretation.
 */
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct WHashtable {
@@ -90,7 +101,8 @@ impl WHashtable {
     }
 }
 
-/// A generic WeeChat [Hdata](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#object_hdata).
+/// A generic WeeChat
+/// [Hdata](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#object_hdata).
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct GenericHdata {
     pub hpath: WString, // FIXME: this should prolly be some kind of "path" type
@@ -104,9 +116,8 @@ pub struct GenericHdata {
 impl GenericHdata {
     /// Returns a Vec of the object sets in the Hdata.
     ///
-    /// This renders some of the type consistency inaccessible to the compiler,
-    /// so only use this in more general cases, where you're not actually doing
-    /// anything with the particular Hdata.
+    /// This renders some of the type consistency inaccessible to the compiler, so only use this in
+    /// more general cases, where you're not actually doing anything with the particular Hdata.
     pub fn sets(&self) -> Vec<HashMap<&Vec<u8>, ObjectRef>> {
         let mut ret = vec![HashMap::new(); self.set_values[0].values.len()];
         for hdata_values in self.set_values.iter() {
@@ -125,27 +136,33 @@ pub struct HdataValues {
     pub values: WArray,
 }
 
-/// A WeeChat [Info](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#object_info).
+/// A WeeChat
+/// [Info](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#object_info).
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct WInfo {
     pub name: WString,
     pub value: WString,
 }
 
-/// A WeeChat [Infolist](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#object_infolist).
+/// A WeeChat
+/// [Infolist](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#object_infolist).
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct WInfolist {
     pub name: WString,
     pub items: Vec<InfolistItem>,
 }
 
-/// An [Infolist](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#object_infolist) item---an element of an Infolist.
+/// An
+/// [Infolist](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#object_infolist)
+/// item---an element of an Infolist.
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct InfolistItem {
     pub variables: Vec<InfolistVariable>,
 }
 
-/// An [Infolist](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#object_infolist) variable---an element of an Infolist item.
+/// An
+/// [Infolist](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#object_infolist)
+/// variable---an element of an Infolist item.
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct InfolistVariable {
     pub name: WString,
@@ -285,14 +302,17 @@ impl MessageType for WArray {
     }
 }
 
-/// A WeeChat [identifier](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#message_identifier).
+/// A WeeChat
+/// [identifier](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#message_identifier).
 #[derive(Debug, PartialEq, Eq)]
 pub enum Identifier {
     Client(Vec<u8>),
     Event(Event),
 }
 
-/// A WeeChat [event](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#message_identifier)---i.e., a reserved identifier.
+/// A WeeChat
+/// [event](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#message_identifier)---i.e.,
+/// a reserved identifier.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Event {
     BufferOpened,
@@ -353,7 +373,8 @@ impl ObjectType {
     }
 }
 
-/// One of the valid WeeChat [Objects](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#objects).
+/// One of the valid WeeChat
+/// [Objects](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#objects).
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum Object {
     Chr(WChar),
@@ -417,7 +438,9 @@ impl<'a> ObjectRef<'a> {
     }
 }
 
-/// A WeeChat [Array](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#object_array)---a vec of a single WeeChat type.
+/// A WeeChat
+/// [Array](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#object_array)---a vec
+/// of a single WeeChat type.
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum WArray {
     Chr(Vec<WChar>),
@@ -434,13 +457,14 @@ pub enum WArray {
     Arr(Vec<WArray>),
 }
 
-/// Apply an expression to any variant of a [WArray].
+/// Apply an expression to any variant of a [`WArray`].
 ///
-/// Each variant of a WArray holds a different type, so there is no way to generically apply an identical expression to all variants.
-/// However, sometimes we don't care about the type, and just want to apply an expression with the same syntax and analagous semantics regardless (e.g., we want to know the length).
-/// This macro does just that.
-/// This obviously means the expression must resolve to valid code when called on any of the particular types.
-/// The expression is applied as a function call.
+/// Each variant of a `WArray` holds a different type, so there is no way to generically apply an
+/// identical expression to all variants.  However, sometimes we don't care about the type, and just
+/// want to apply an expression with the same syntax and analogous semantics regardless (e.g., we
+/// want to know the length).  This macro does just that.  This obviously means the expression must
+/// resolve to valid code when called on any of the particular types.  The expression is applied as
+/// a function call.
 ///
 /// E.g., `len` is defined as
 /// `
@@ -468,9 +492,10 @@ macro_rules! apply_to_warray {
     };
 }
 
-/// Apply an expression to any variant of a [WArray], with auxilliary data.
+/// Apply an expression to any variant of a [`WArray`], with auxiliary data.
 ///
-/// This is the same as [apply_to_warray], but with the second argument given as the second argument to the function call.
+/// This is the same as [`apply_to_warray`], but with the second argument given as the second
+/// argument to the function call.
 #[macro_export]
 macro_rules! apply_to_warray_with {
     ( $warray:expr, $data:expr, $function:expr ) => {
@@ -509,7 +534,7 @@ impl WArray {
     }
 }
 
-/// For converting a WHashtable into a HashMap
+/// For converting a [`WHashtable`] into a [`HashMap`]
 pub fn to_hashmap<K, V>(keys: Vec<K>, vals: Vec<V>) -> HashMap<K, V>
 where
     K: Eq + std::hash::Hash,

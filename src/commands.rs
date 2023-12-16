@@ -7,18 +7,21 @@ pub enum WeechatError {
     NewlineInArgument,
 }
 
-/// A [String] that has been checked for invalid argument representations.
+/// A [`String`] that has been checked for invalid argument representations.
 ///
-/// The checks are for basic validity, in the sense that using this as an argument will not cause malformed commands at the protocol level (improper or incorrect arguments are still possible, but they won't break the protocol itself). Currently, this only implies that the argument is a valid string, and that it contains no newlines.
+/// The checks are for basic validity, in the sense that using this as an argument will not cause
+/// malformed commands at the protocol level (improper or incorrect arguments are still possible,
+/// but they won't break the protocol itself). Currently, this only implies that the argument is a
+/// valid string, and that it contains no newlines.
 #[derive(Debug, Clone)]
 pub struct StringArgument(String);
 
-/// A [&str] that has been checked for invalid argument representations. See [StringArgument].
+/// A [`&str`] that has been checked for invalid argument representations. See [`StringArgument`].
 #[derive(Debug)]
 pub struct StrArgument<'a>(&'a str);
 
 impl StringArgument {
-    /// Create a new [StringArgument], returning an error if it fails any checks.
+    /// Create a new [`StringArgument`], returning an error if it fails any checks.
     pub fn new(string: String) -> Result<Self, WeechatError> {
         if string.contains('\n') {
             return Err(WeechatError::NewlineInArgument);
@@ -26,15 +29,17 @@ impl StringArgument {
         Ok(Self(string))
     }
 
-    /// Create a new [Option<StringArgument>] from an [Option<String>], returning an error it if fails any checks.
+    /// Create a new [`Option<StringArgument>`] from an [`Option<String>`], returning an error it if
+    /// fails any checks.
     pub fn option_new(string: Option<String>) -> Result<Option<Self>, WeechatError> {
         string.map(Self::new).map_or(Ok(None), |s| s.map(Some))
     }
 }
 
-/// Create a [StringArgument] from a string literal (i.e., a [`&'static str`](str)).
+/// Create a [`StringArgument`] from a string literal (i.e., a [`&'static str`](str)).
 ///
-/// The underlying [String] is allocated at runtime, but the correctness checks are performed at compile time.
+/// The underlying [`String`] is allocated at runtime, but the correctness checks are performed at
+/// compile time.
 #[macro_export]
 macro_rules! literal_stringarg {
     ($string:expr) => {{
@@ -50,7 +55,7 @@ impl std::fmt::Display for StringArgument {
 }
 
 impl<'a> StrArgument<'a> {
-    /// Create a new [StrArgument], returning an error if it fails any checks.
+    /// Create a new [`StrArgument`], returning an error if it fails any checks.
     pub fn new(string: &'a str) -> Result<Self, WeechatError> {
         if string.contains('\n') {
             return Err(WeechatError::NewlineInArgument);
@@ -58,13 +63,15 @@ impl<'a> StrArgument<'a> {
         Ok(Self(string))
     }
 
-    /// Create a new [Option<StrArgument>] from an [Option<&str>], returning an error it if fails any checks.
+    /// Create a new [`Option<StrArgument>`] from an [`Option<&str>`], returning an error it if
+    /// fails any checks.
     pub fn option_new(string: Option<&'a str>) -> Result<Option<Self>, WeechatError> {
         string.map(Self::new).map_or(Ok(None), |s| s.map(Some))
     }
 
-    /// The same as [new](StrArgument::new), but const (i.e., validity checks can be performed at compile-time).
-    /// This could be called at runtime too, but because bad arguments would cause assertion failures rather than returning an error, it is strongly advised to not be.
+    /// The same as [`new`](StrArgument::new), but const (i.e., validity checks can be performed at
+    /// compile-time). This could be called at runtime too, but because bad arguments would cause
+    /// assertion failures rather than returning an error, it is strongly advised to not be.
     pub const fn const_new(string: &'static str) -> Self {
         let bytes = string.as_bytes();
         let mut i = 0;
@@ -76,7 +83,7 @@ impl<'a> StrArgument<'a> {
         Self(string)
     }
 
-    /// Converts to a [StringArgument].
+    /// Converts to a [`StringArgument`].
     pub fn to_stringargument(self) -> StringArgument {
         StringArgument(self.0.to_string())
     }
@@ -141,7 +148,9 @@ pub trait CommandType {
     fn arguments(&self) -> Vec<String>;
 }
 
-/// The [handshake command](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#command_handshake), sent before anything else in a session.
+/// The [handshake
+/// command](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#command_handshake),
+/// sent before anything else in a session.
 ///
 /// Response: [Hashtable](crate::messages::WHashtable)
 pub struct HandshakeCommand {
@@ -193,7 +202,9 @@ impl CommandType for HandshakeCommand {
     }
 }
 
-/// The [init command](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#command_init), used to authenticate a session.
+/// The [init
+/// command](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#command_init), used
+/// to authenticate a session.
 ///
 /// Response: None
 pub struct InitCommand {
@@ -241,7 +252,9 @@ impl CommandType for InitCommand {
     }
 }
 
-/// The [hdata command](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#command_hdata), used to request structured data.
+/// The [hdata
+/// command](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#command_hdata), used
+/// to request structured data.
 ///
 /// Response: [Hdata](crate::messages::GenericHdata)
 pub struct HdataCommand {
@@ -258,7 +271,8 @@ impl HdataCommand {
     ///
     /// pointer: A pointer or list name, forming the root of the path to the requested variable.
     ///
-    /// vars: A list of variable names that, with the pointer root, form the path to the requested variable (the last in the path).
+    /// vars: A list of variable names that, with the pointer root, form the path to the requested
+    /// variable (the last in the path).
     ///
     /// keys: A list of keys to return in the hdata. An empty list returns all keys.
     pub fn new(
@@ -313,7 +327,9 @@ impl CommandType for HdataCommand {
     }
 }
 
-/// The [info command](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#command_info), used to request a single name/value pair.
+/// The [info
+/// command](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#command_info), used
+/// to request a single name/value pair.
 ///
 /// Response: [Info](crate::messages::WInfo)
 pub struct InfoCommand {
@@ -339,7 +355,9 @@ impl CommandType for InfoCommand {
     }
 }
 
-/// The [infolist command](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#command_infolist), used to request a list of name/value pairs.
+/// The [infolist
+/// command](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#command_infolist),
+/// used to request a list of name/value pairs.
 ///
 /// Response: [Infolist](crate::messages::WInfolist)
 pub struct InfolistCommand {
@@ -384,7 +402,9 @@ impl CommandType for InfolistCommand {
     }
 }
 
-/// The [nicklist command](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#command_nicklist), used to request a nicklist for one or all buffers.
+/// The [nicklist
+/// command](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#command_nicklist),
+/// used to request a nicklist for one or all buffers.
 ///
 /// Response: [Hdata](crate::messages::GenericHdata)
 pub struct NicklistCommand {
@@ -411,7 +431,9 @@ impl CommandType for NicklistCommand {
     }
 }
 
-/// The [input command](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#command_input), used to send data to a buffer.
+/// The [input
+/// command](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#command_input), used
+/// to send data to a buffer.
 ///
 /// Response: None
 pub struct InputCommand {
@@ -435,7 +457,9 @@ impl CommandType for InputCommand {
     }
 }
 
-/// The [completion command](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#command_completion), used to request possible string completions.
+/// The [completion
+/// command](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#command_completion),
+/// used to request possible string completions.
 ///
 /// Response: [Hdata](crate::messages::GenericHdata)
 pub struct CompletionCommand {
@@ -504,9 +528,12 @@ macro_rules! sync_args {
     };
 }
 
-/// The [sync command](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#command_sync), used to pull updates for one or more buffers.
+/// The [sync
+/// command](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#command_sync), used
+/// to pull updates for one or more buffers.
 ///
-/// Response: 0 or more [Hdatas](crate::messages::GenericHdata), recieved until a [DesyncCommand] is sent.
+/// Response: 0 or more [Hdatas](crate::messages::GenericHdata), received until a [`DesyncCommand`]
+/// is sent.
 pub enum SyncCommand {
     AllBuffers(SyncAllBuffers),
     SomeBuffers(Vec<PointerOrName>, SyncSomeBuffers),
@@ -522,7 +549,9 @@ impl CommandType for SyncCommand {
     }
 }
 
-/// The [desync command](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#command_desync), used to stop updates from one or more buffers.
+/// The [desync
+/// command](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#command_desync),
+/// used to stop updates from one or more buffers.
 ///
 /// Response: None
 pub enum DesyncCommand {
@@ -540,9 +569,18 @@ impl CommandType for DesyncCommand {
     }
 }
 
-/// The [test command](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#command_test), used to request sample objects for testing code.
+/// The [test
+/// command](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#command_test), used
+/// to request sample objects for testing code.
 ///
-/// Response (see linked docs above for values): [Char](crate::messages::WChar), [Integer](crate::messages::WInteger), [Integer](crate::messages::WInteger), [Long](crate::messages::WLongInteger), [Long](crate::messages::WLongInteger), [String](crate::messages::WString), [String](crate::messages::WString), [String](crate::messages::WString), [Buffer](crate::messages::WBuffer), [Buffer](crate::messages::WBuffer), [Pointer], [Pointer], [Time](crate::messages::WTime), [Array](crate::messages::WArray) ([String](crate::messages::WString)), [Array](crate::messages::WArray) ([Integer](crate::messages::WInteger))
+/// Response (see linked docs above for values): [Char](crate::messages::WChar),
+/// [Integer](crate::messages::WInteger), [Integer](crate::messages::WInteger),
+/// [Long](crate::messages::WLongInteger), [Long](crate::messages::WLongInteger),
+/// [String](crate::messages::WString), [String](crate::messages::WString),
+/// [String](crate::messages::WString), [Buffer](crate::messages::WBuffer),
+/// [Buffer](crate::messages::WBuffer), [Pointer], [Pointer], [Time](crate::messages::WTime),
+/// [Array](crate::messages::WArray) ([String](crate::messages::WString)),
+/// [Array](crate::messages::WArray) ([Integer](crate::messages::WInteger))
 #[derive(Default)]
 pub struct TestCommand {}
 
@@ -555,9 +593,12 @@ impl CommandType for TestCommand {
     }
 }
 
-/// The [ping command](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#command_ping), used to test liveness and response time.
+/// The [ping
+/// command](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#command_ping), used
+/// to test liveness and response time.
 ///
-/// Response: [String](crate::messages::WString), with [Pong](crate::messages::Event::Pong) identifier.
+/// Response: [String](crate::messages::WString), with [Pong](crate::messages::Event::Pong)
+/// identifier.
 pub struct PingCommand {
     pub argument: StringArgument,
 }
@@ -577,7 +618,9 @@ impl CommandType for PingCommand {
     }
 }
 
-/// The [quit command](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#command_quit), used to disconnect from the relay.
+/// The [quit
+/// command](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#command_quit), used
+/// to disconnect from the relay.
 ///
 /// Response: None
 #[derive(Default)]
@@ -594,11 +637,13 @@ impl CommandType for QuitCommand {
 
 /// Options for syncing/desyncing all buffers.
 pub struct SyncAllBuffers {
-    /// Whether to receive signals about buffers: open/closed, moved, renamed, merged/unmerged, hidden/unhidden
+    /// Whether to receive signals about buffers: open/closed, moved, renamed, merged/unmerged,
+    /// hidden/unhidden
     pub buffers: bool,
     /// Whether to receive signals about WeeChat upgrades (upgrade, upgrade ended)
     pub upgrade: bool,
-    /// Whether to receive signals about each buffer (new lines, type changed, title changed, local variable added/removed, plus everything in [Self::buffers].
+    /// Whether to receive signals about each buffer (new lines, type changed, title changed, local
+    /// variable added/removed, plus everything in [`Self::buffers`].
     pub buffer: bool,
     /// Whether to receive updated nicklists when changed.
     pub nicklist: bool,
@@ -606,7 +651,8 @@ pub struct SyncAllBuffers {
 
 impl SyncAllBuffers {
     fn to_string(&self) -> Option<String> {
-        // spec specifically recommends (though doesn't require) handling the all case as the default case
+        // spec specifically recommends (though doesn't require) handling the all case as the
+        // default case
         if (self.buffers && self.upgrade && self.buffer && self.nicklist)
             || (!self.buffers && !self.upgrade && !self.buffer && !self.nicklist)
         {
@@ -631,7 +677,8 @@ impl SyncAllBuffers {
 
 /// Options for syncing/desyncing some buffers.
 pub enum SyncSomeBuffers {
-    /// Only receive signals about the buffer: new lines, type changed, title changed, local variable added/removed, opened/closed, moved, renamed, merged/unmerged, hidden/unhidden.
+    /// Only receive signals about the buffer: new lines, type changed, title changed, local
+    /// variable added/removed, opened/closed, moved, renamed, merged/unmerged, hidden/unhidden.
     Buffer,
     /// Only receive updated nicklist when changed.
     Nicklist,
@@ -703,9 +750,10 @@ impl std::fmt::Display for PasswordHash {
     }
 }
 
-/// The count of elements in an [HdataCommand].
+/// The count of elements in an [`HdataCommand`].
 ///
-/// Positive counts mean the next elements, negative counts mean the previous elements, a glob means the next elements to the end of the list.
+/// Positive counts mean the next elements, negative counts mean the previous elements, a glob means
+/// the next elements to the end of the list.
 pub enum Count {
     Count(i32),
     Glob,
@@ -720,7 +768,7 @@ impl std::fmt::Display for Count {
     }
 }
 
-/// A contable element in an [HdataCommand], with its count.
+/// A countable element in an [`HdataCommand`], with its count.
 pub struct Countable<T: std::fmt::Display> {
     pub count: Option<Count>,
     pub object: T,
@@ -741,7 +789,7 @@ impl<T: std::fmt::Display> std::fmt::Display for Countable<T> {
     }
 }
 
-/// A [Pointer] or name in root of the path of an [HdataCommand].
+/// A [`Pointer`] or name in root of the path of an [`HdataCommand`].
 pub enum PointerOrName {
     Pointer(Pointer),
     Name(StringArgument),
