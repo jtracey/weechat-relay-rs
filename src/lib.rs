@@ -42,12 +42,3 @@ impl Connection {
         message_parser::get_message_verbose_errors(&mut self.stream)
     }
 }
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        let result = 2 + 2;
-        assert_eq!(result, 4);
-    }
-}
