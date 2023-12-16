@@ -282,7 +282,11 @@ where
             b"_upgrade" => Identifier::Event(Event::Upgrade),
             b"_upgrade_ended" => Identifier::Event(Event::UpgradeEnded),
             _ => {
-                eprintln!("weechat-relay-rs: Unrecognized reserved identifier (handling as client identifier): {}", String::from_utf8_lossy(id));
+                eprintln!(
+                    "weechat-relay-rs: Unrecognized reserved identifier\
+                     (handling as client identifier): {}",
+                    String::from_utf8_lossy(id)
+                );
                 Identifier::Client(id.to_vec())
             }
         }
@@ -491,7 +495,9 @@ macro_rules! parse_hashtable_match_val {
     ( $i:expr, $type_keys:ident, $type_vals:expr, $($possible_type:ident),* ) => {
         match $type_vals {
             $(
-                ObjectType::$possible_type => apply_and_gen_hashtable($i, parser_for!($type_keys), parser_for!($possible_type)),
+                ObjectType::$possible_type => apply_and_gen_hashtable(
+                    $i, parser_for!($type_keys), parser_for!($possible_type)
+                ),
             )*
         }
     };
@@ -501,7 +507,10 @@ macro_rules! parse_hashtable_match_key {
     ( $i:expr, $type_keys:expr, $type_vals:expr, $($possible_type:ident),* ) => {
         match $type_keys {
             $(
-                ObjectType::$possible_type => parse_hashtable_match_val!($i, $possible_type, $type_vals, Chr, Int, Lon, Str, Buf, Ptr, Tim, Htb, Hda, Inf, Inl, Arr),
+                ObjectType::$possible_type => parse_hashtable_match_val!(
+                    $i, $possible_type, $type_vals,
+                    Chr, Int, Lon, Str, Buf, Ptr, Tim, Htb, Hda, Inf, Inl, Arr
+                ),
             )*
         }
     };

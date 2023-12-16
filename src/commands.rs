@@ -362,8 +362,10 @@ impl CommandType for InfoCommand {
 /// Response: [Infolist](crate::messages::WInfolist)
 pub struct InfolistCommand {
     name: StringArgument,
-    // As of version 3.7 of the WeeChat Relay Protocol, if there are any arguments, the first argument *must* be a Pointer.
-    // Arguments to infolists without pointers can be accessed using a NULL pointer.
+    // As of version 3.7 of the WeeChat Relay Protocol, if there are
+    // any arguments, the first argument *must* be a Pointer.
+    // Arguments to infolists without pointers can be accessed using a
+    // NULL pointer.
     arguments: Option<(Pointer, Vec<StringArgument>)>,
 }
 
@@ -872,7 +874,10 @@ mod tests {
         );
         // FIXME: we shouldn't be testing the order of the options here,
         // but should make sure however we end up testing checks for proper formatting
-        assert_eq!(command.to_string(), "(Foo) handshake password_hash_algo=plain:sha256:sha512:pbkdf2+sha256:pbkdf2+sha512,compression=zstd:zlib:off\n");
+        assert_eq!(
+            command.to_string(),
+            "(Foo) handshake password_hash_algo=plain:sha256:sha512:pbkdf2+sha256:pbkdf2+sha512,compression=zstd:zlib:off\n"
+        );
     }
 
     #[test]
@@ -890,6 +895,7 @@ mod tests {
             0x85, 0xb1, 0xee, 0x00, 0x69, 0x5a, 0x5b, 0x25, 0x4e, 0x14, 0xf4, 0x88, 0x55, 0x38,
             0xdf, 0x0d, 0xa4, 0xb7, 0x32, 0x07, 0xf5, 0xaa, 0xe4,
         ];
+        let salt_string = hex_encode(&salt);
 
         let sha256_password = InitCommand {
             password: None,
@@ -946,13 +952,25 @@ mod tests {
         assert_eq!(command.to_string(), "init password=mypass,totp=123456\n");
 
         let command = Command::new(None, sha256_password);
-        assert_eq!(command.to_string(), "init password_hash=sha256:85b1ee00695a5b254e14f4885538df0da4b73207f5aae4:2c6ed12eb0109fca3aedc03bf03d9b6e804cd60a23e1731fd17794da423e21db\n");
+        let hash = "2c6ed12eb0109fca3aedc03bf03d9b6e804cd60a23e1731fd17794da423e21db";
+        assert_eq!(
+            command.to_string(),
+            format!("init password_hash=sha256:{salt_string}:{hash}\n")
+        );
 
         let command = Command::new(None, sha512_password);
-        assert_eq!(command.to_string(), "init password_hash=sha512:85b1ee00695a5b254e14f4885538df0da4b73207f5aae4:0a1f0172a542916bd86e0cbceebc1c38ed791f6be246120452825f0d74ef1078c79e9812de8b0ab3dfaf598b6ca14522374ec6a8653a46df3f96a6b54ac1f0f8\n");
+        let hash = "0a1f0172a542916bd86e0cbceebc1c38ed791f6be246120452825f0d74ef1078c79e9812de8b0ab3dfaf598b6ca14522374ec6a8653a46df3f96a6b54ac1f0f8";
+        assert_eq!(
+            command.to_string(),
+            format!("init password_hash=sha512:{salt_string}:{hash}\n")
+        );
 
         let command = Command::new(None, pbkdf2_password);
-        assert_eq!(command.to_string(), "init password_hash=pbkdf2+sha256:85b1ee00695a5b254e14f4885538df0da4b73207f5aae4:100000:ba7facc3edb89cd06ae810e29ced85980ff36de2bb596fcf513aaab626876440\n");
+        let hash = "ba7facc3edb89cd06ae810e29ced85980ff36de2bb596fcf513aaab626876440";
+        assert_eq!(
+            command.to_string(),
+            format!("init password_hash=pbkdf2+sha256:{salt_string}:100000:{hash}\n")
+        );
     }
 
     #[test]
