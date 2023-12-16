@@ -468,7 +468,7 @@ where
     M: MessageType + Clone,
     N: MessageType + Clone,
 {
-    let (left, right): (Vec<M>, Vec<N>) = pairs.iter().cloned().unzip();
+    let (left, right): (Vec<M>, Vec<N>) = pairs.into_iter().unzip();
     WHashtable::new(MessageType::to_warray(left), MessageType::to_warray(right))
 }
 
