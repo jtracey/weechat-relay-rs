@@ -10,7 +10,7 @@ use std::fmt::{Display, Formatter};
 /// only specified at the protocol level, we strongly advise to only use pointers as opaque handles
 /// provided by the relay.
 // pointers are always represented as ASCII hex strings in the protocol
-// e.g., command string "0xf00" == 3"foo" binary message
+// e.g., command string "0xf00" == 3"f00" binary message
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct Pointer(Vec<u8>);
 
