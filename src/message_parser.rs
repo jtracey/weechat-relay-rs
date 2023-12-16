@@ -469,7 +469,10 @@ where
     N: MessageType + Clone,
 {
     let (left, right): (Vec<M>, Vec<N>) = pairs.into_iter().unzip();
-    WHashtable::new(MessageType::to_warray(left), MessageType::to_warray(right))
+    WHashtable {
+        keys: MessageType::to_warray(left),
+        vals: MessageType::to_warray(right),
+    }
 }
 
 fn apply_and_gen_hashtable<J, M, N, E>(
@@ -929,16 +932,16 @@ mod tests {
         let h = res.unwrap().1;
         assert_eq!(
             h,
-            WHashtable::new(
-                WArray::Str(vec![
+            WHashtable {
+                keys: WArray::Str(vec![
                     WString::new(Some(b"key1".to_vec())),
                     WString::new(Some(b"key2".to_vec()))
                 ]),
-                WArray::Str(vec![
+                vals: WArray::Str(vec![
                     WString::new(Some(b"abc".to_vec())),
                     WString::new(Some(b"def".to_vec()))
                 ])
-            )
+            }
         );
     }
 

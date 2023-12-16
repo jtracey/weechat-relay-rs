@@ -82,23 +82,8 @@ the safer interpretation.
 */
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct WHashtable {
-    keys: WArray,
-    vals: WArray,
-}
-
-impl WHashtable {
-    pub fn new(keys: WArray, vals: WArray) -> Self {
-        debug_assert_eq!(keys.len(), vals.len());
-        Self { keys, vals }
-    }
-
-    pub fn keys(&self) -> &WArray {
-        &self.keys
-    }
-
-    pub fn vals(&self) -> &WArray {
-        &self.vals
-    }
+    pub keys: WArray,
+    pub vals: WArray,
 }
 
 /// A generic WeeChat
