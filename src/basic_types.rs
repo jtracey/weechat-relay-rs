@@ -1,6 +1,6 @@
 use std::fmt::{Display, Formatter};
 
-/// A pointer as provided by the WeeChat relay.
+/// A [Pointer](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#object_pointer) as provided by the WeeChat relay.
 ///
 /// Note that while these pointers are probably parsed into an actual machine pointer type on the
 /// relay side, the protocol treats them as strings with particular constraints. This means that
