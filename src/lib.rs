@@ -38,7 +38,7 @@ impl Connection {
 
     pub fn get_message(
         &mut self,
-    ) -> Result<Message, ParseMessageError<Vec<u8>, nom::error::VerboseError<Vec<u8>>>> {
+    ) -> Result<Message, ParseMessageError<nom::error::VerboseError<Vec<u8>>>> {
         message_parser::get_message_verbose_errors(&mut self.stream)
     }
 }
