@@ -59,21 +59,17 @@ macro_rules! parser_for {
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum ParseMessageError<E> {
-    IO(std::io::Error),
+    Network(String, std::io::Error),
     Parser(nom::Err<E>),
-}
-
-impl<E> From<std::io::Error> for ParseMessageError<E> {
-    fn from(e: std::io::Error) -> Self {
-        Self::IO(e)
-    }
 }
 
 pub fn get_message(
     stream: &mut TcpStream,
 ) -> Result<Message, ParseMessageError<nom::error::Error<Vec<u8>>>> {
     let mut message_size = vec![0u8; 4];
-    stream.read_exact(&mut message_size)?;
+    stream
+        .read_exact(&mut message_size)
+        .map_err(|e| ParseMessageError::Network("failed to read message size".to_string(), e))?;
     let size_as_slice: &[u8] = &message_size;
     let res =
         be_u32::<_, _>(size_as_slice).map_err(|e: nom::Err<nom::error::Error<&[u8]>>| e.to_owned());
@@ -86,7 +82,9 @@ pub fn get_message(
     debug_assert!(i.is_empty());
 
     let mut message = vec![0u8; message_size as usize - 4];
-    stream.read_exact(&mut message)?;
+    stream
+        .read_exact(&mut message)
+        .map_err(|e| ParseMessageError::Network("failed to read message body".to_string(), e))?;
     let message_as_slice: &[u8] = &message;
     let res = parse_message::<_, _>(message_as_slice)
         .map_err(|e: nom::Err<nom::error::Error<&[u8]>>| e.to_owned());
@@ -104,7 +102,9 @@ pub fn get_message_verbose_errors(
     stream: &mut TcpStream,
 ) -> Result<Message, ParseMessageError<nom::error::VerboseError<Vec<u8>>>> {
     let mut message_size = vec![0u8; 4];
-    stream.read_exact(&mut message_size)?;
+    stream
+        .read_exact(&mut message_size)
+        .map_err(|e| ParseMessageError::Network("failed to read message size".to_string(), e))?;
     let size_as_slice: &[u8] = &message_size;
     let res: Result<(_, _), nom::Err<nom::error::VerboseError<Vec<u8>>>> =
         be_u32::<_, _>(size_as_slice).map_err(|e: nom::Err<nom::error::VerboseError<&[u8]>>| {
@@ -125,7 +125,9 @@ pub fn get_message_verbose_errors(
     debug_assert!(i.is_empty());
 
     let mut message = vec![0u8; message_size as usize - 4];
-    stream.read_exact(&mut message)?;
+    stream
+        .read_exact(&mut message)
+        .map_err(|e| ParseMessageError::Network("failed to read message body".to_string(), e))?;
     let message_as_slice: &[u8] = &message;
     let res = parse_message::<_, _>(message_as_slice).map_err(
         |e: nom::Err<nom::error::VerboseError<&[u8]>>| {
