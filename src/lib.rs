@@ -18,6 +18,7 @@ pub struct Connection {
 }
 
 impl Connection {
+    /// Send a single command on the `Connection`.
     pub fn send_command<T: CommandType>(
         &mut self,
         command: &Command<T>,
@@ -27,6 +28,7 @@ impl Connection {
         self.stream.flush()
     }
 
+    /// Send a series of commands on the `Connection`.
     pub fn send_commands(
         &mut self,
         commands: &mut dyn Iterator<Item = &DynCommand>,
@@ -36,6 +38,7 @@ impl Connection {
         self.stream.flush()
     }
 
+    /// Get a response on the `Connection`.
     pub fn get_message(
         &mut self,
     ) -> Result<Message, ParseMessageError<nom::error::VerboseError<Vec<u8>>>> {

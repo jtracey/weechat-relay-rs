@@ -16,6 +16,7 @@ use std::fmt::{Display, Formatter};
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct Pointer(Vec<u8>);
 
+/// Errors when attempting to construct a pointer.
 #[derive(Debug)]
 pub enum PointerError {
     /// The pointer string contains non-ASCII characters.
