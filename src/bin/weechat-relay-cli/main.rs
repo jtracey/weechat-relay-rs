@@ -261,16 +261,19 @@ fn parse_handshake_command(args: &str) -> Result<(Option<Box<dyn CommandType>>, 
             return Err(InputError::InvalidKeyVal);
         }
     }
-    let handshake = HandshakeCommand::new(password_hash_algo, vec![Compression::Off]);
+    let handshake = HandshakeCommand {
+        password_hash_algo,
+        compression: vec![Compression::Off],
+    };
     Ok((Some(Box::new(handshake)), 1))
 }
 
 fn parse_init_command(args: &str) -> Result<(Option<Box<dyn CommandType>>, u32), InputError> {
-    let init = InitCommand::new(
-        Some(StrArgument::new(args)?.to_stringargument()),
-        None,
-        None,
-    );
+    let init = InitCommand {
+        password: Some(StrArgument::new(args)?.to_stringargument()),
+        password_hash: None,
+        totp: None,
+    };
     Ok((Some(Box::new(init)), 0))
 }
 
@@ -329,7 +332,12 @@ fn parse_hdata_command(args: &str) -> Result<(Option<Box<dyn CommandType>>, u32)
         vec![]
     };
 
-    let hdata = HdataCommand::new(name, pointer, vars, keys);
+    let hdata = HdataCommand {
+        name,
+        pointer,
+        vars,
+        keys,
+    };
     Ok((Some(Box::new(hdata)), 1))
 }
 
@@ -343,7 +351,10 @@ fn parse_info_command(args: &str) -> Result<(Option<Box<dyn CommandType>>, u32),
     } else {
         vec![]
     };
-    let info = InfoCommand::new(StrArgument::new(split[0])?.to_stringargument(), arguments);
+    let info = InfoCommand {
+        name: StrArgument::new(split[0])?.to_stringargument(),
+        arguments,
+    };
     Ok((Some(Box::new(info)), 1))
 }
 
@@ -379,7 +390,7 @@ fn parse_nicklist_command(args: &str) -> Result<(Option<Box<dyn CommandType>>, u
     } else {
         None
     };
-    let nicklist = NicklistCommand::new(buffer);
+    let nicklist = NicklistCommand { buffer };
     Ok((Some(Box::new(nicklist)), 1))
 }
 
@@ -387,7 +398,7 @@ fn parse_input_command(args: &str) -> Result<(Option<Box<dyn CommandType>>, u32)
     let (buffer, data) = args.split_once(' ').ok_or(InputError::MissingArgument)?;
     let buffer = PointerOrName::Name(StrArgument::new(buffer)?.to_stringargument());
     let data = StrArgument::new(data.trim_start())?.to_stringargument();
-    let input = InputCommand::new(buffer, data);
+    let input = InputCommand { buffer, data };
     Ok((Some(Box::new(input)), 0))
 }
 
@@ -411,7 +422,11 @@ fn parse_completion_command(args: &str) -> Result<(Option<Box<dyn CommandType>>,
         Some(position as u16)
     };
 
-    let completion = CompletionCommand::new(buffer, position, data);
+    let completion = CompletionCommand {
+        buffer,
+        position,
+        data,
+    };
     Ok((Some(Box::new(completion)), 1))
 }
 
@@ -517,7 +532,9 @@ fn parse_test_command(_args: &str) -> Result<(Option<Box<dyn CommandType>>, u32)
 }
 
 fn parse_ping_command(args: &str) -> Result<(Option<Box<dyn CommandType>>, u32), InputError> {
-    let ping = PingCommand::new(StrArgument::new(args)?.to_stringargument());
+    let ping = PingCommand {
+        argument: StrArgument::new(args)?.to_stringargument(),
+    };
     Ok((Some(Box::new(ping)), 1))
 }
 
@@ -573,8 +590,8 @@ fn fmt_str(wstr: &WString, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result 
 }
 
 fn fmt_htb(htb: &WHashtable, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    let keys = htb.keys().to_ref_vec();
-    let vals = htb.vals().to_ref_vec();
+    let keys = htb.keys.to_ref_vec();
+    let vals = htb.vals.to_ref_vec();
     let keypairs = keys.into_iter().zip(vals);
     write!(f, "htb: {{")?;
     for (key, val) in keypairs {

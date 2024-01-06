@@ -154,17 +154,10 @@ pub trait CommandType {
 ///
 /// Response: [Hashtable](crate::messages::WHashtable)
 pub struct HandshakeCommand {
-    password_hash_algo: Vec<PasswordHashAlgo>,
-    compression: Vec<Compression>,
-}
-
-impl HandshakeCommand {
-    pub fn new(password_hash_algo: Vec<PasswordHashAlgo>, compression: Vec<Compression>) -> Self {
-        Self {
-            password_hash_algo,
-            compression,
-        }
-    }
+    /// List of password hash algorithms this client is willing to accept.
+    pub password_hash_algo: Vec<PasswordHashAlgo>,
+    /// List of compresion algorithms this client is willing to accept.
+    pub compression: Vec<Compression>,
 }
 
 impl CommandType for HandshakeCommand {
@@ -208,23 +201,12 @@ impl CommandType for HandshakeCommand {
 ///
 /// Response: None
 pub struct InitCommand {
-    password: Option<StringArgument>,
-    password_hash: Option<PasswordHash>,
-    totp: Option<StringArgument>,
-}
-
-impl InitCommand {
-    pub fn new(
-        password: Option<StringArgument>,
-        password_hash: Option<PasswordHash>,
-        totp: Option<StringArgument>,
-    ) -> Self {
-        Self {
-            password,
-            password_hash,
-            totp,
-        }
-    }
+    /// Plaintext password authenticator. Probably mutually exclusive with `password_hash`.
+    pub password: Option<StringArgument>,
+    /// Hashed password. Probably mutually exclusive with `password`.
+    pub password_hash: Option<PasswordHash>,
+    /// Time-based One-Time Password. Typically combined with one of `password` or `password_hash`.
+    pub totp: Option<StringArgument>,
 }
 
 impl CommandType for InitCommand {
@@ -258,37 +240,18 @@ impl CommandType for InitCommand {
 ///
 /// Response: [Hdata](crate::messages::GenericHdata)
 pub struct HdataCommand {
-    name: StringArgument,
-    pointer: Countable<PointerOrName>,
-    vars: Vec<Countable<StringArgument>>,
-    keys: Vec<StringArgument>,
+    /// The name of the requested hdata.
+    pub name: StringArgument,
+    /// A pointer or list name, forming the root of the path to the requested variable.
+    pub pointer: Countable<PointerOrName>,
+    /// A list of variable names that, with the pointer root, form the path to the requested
+    /// variable (the last in the path).
+    pub vars: Vec<Countable<StringArgument>>,
+    /// A list of keys to return in the hdata. An empty list returns all keys.
+    pub keys: Vec<StringArgument>,
 }
 
 impl HdataCommand {
-    /// HdataCommand constructor.
-    ///
-    /// name: The name of the requested hdata.
-    ///
-    /// pointer: A pointer or list name, forming the root of the path to the requested variable.
-    ///
-    /// vars: A list of variable names that, with the pointer root, form the path to the requested
-    /// variable (the last in the path).
-    ///
-    /// keys: A list of keys to return in the hdata. An empty list returns all keys.
-    pub fn new(
-        name: StringArgument,
-        pointer: Countable<PointerOrName>,
-        vars: Vec<Countable<StringArgument>>,
-        keys: Vec<StringArgument>,
-    ) -> Self {
-        Self {
-            name,
-            pointer,
-            vars,
-            keys,
-        }
-    }
-
     fn path(&self) -> String {
         if self.vars.is_empty() {
             format!("{}:{}", self.name, self.pointer)
@@ -333,14 +296,10 @@ impl CommandType for HdataCommand {
 ///
 /// Response: [Info](crate::messages::WInfo)
 pub struct InfoCommand {
-    name: StringArgument,
-    arguments: Vec<StringArgument>,
-}
-
-impl InfoCommand {
-    pub fn new(name: StringArgument, arguments: Vec<StringArgument>) -> Self {
-        Self { name, arguments }
-    }
+    /// Name of the info being requested.
+    pub name: StringArgument,
+    /// Arguments to the info request.
+    pub arguments: Vec<StringArgument>,
 }
 
 impl CommandType for InfoCommand {
@@ -372,9 +331,9 @@ pub struct InfolistCommand {
 impl InfolistCommand {
     /// InfolistCommand constructor.
     ///
-    /// name: The name of the infolist being requested.
+    /// `name`: The name of the infolist being requested.
     ///
-    /// arguments: Arguments to the infolist request.
+    /// `arguments`: Arguments to the infolist request.
     pub fn new(
         name: StringArgument,
         pointer: Option<Pointer>,
@@ -410,13 +369,7 @@ impl CommandType for InfolistCommand {
 ///
 /// Response: [Hdata](crate::messages::GenericHdata)
 pub struct NicklistCommand {
-    buffer: Option<PointerOrName>,
-}
-
-impl NicklistCommand {
-    pub fn new(buffer: Option<PointerOrName>) -> Self {
-        Self { buffer }
-    }
+    pub buffer: Option<PointerOrName>,
 }
 
 impl CommandType for NicklistCommand {
@@ -439,14 +392,10 @@ impl CommandType for NicklistCommand {
 ///
 /// Response: None
 pub struct InputCommand {
-    buffer: PointerOrName,
-    data: StringArgument,
-}
-
-impl InputCommand {
-    pub fn new(buffer: PointerOrName, data: StringArgument) -> Self {
-        Self { buffer, data }
-    }
+    /// Pointer to or full name of the buffer.
+    pub buffer: PointerOrName,
+    /// String to input to the buffer.
+    pub data: StringArgument,
 }
 
 impl CommandType for InputCommand {
@@ -465,22 +414,15 @@ impl CommandType for InputCommand {
 ///
 /// Response: [Hdata](crate::messages::GenericHdata)
 pub struct CompletionCommand {
-    buffer: PointerOrName,
+    /// Pointer or name of the buffer to get completion from.
+    pub buffer: PointerOrName,
     // if ever extended to negatives aside -1, extend this to i32
     // so behavior of all currently working values is preserved
     // (Idk what you're completing that's over 32,768 chars, but I'm not judging)
-    position: Option<u16>,
-    data: Option<StringArgument>,
-}
-
-impl CompletionCommand {
-    pub fn new(buffer: PointerOrName, position: Option<u16>, data: Option<StringArgument>) -> Self {
-        Self {
-            buffer,
-            position,
-            data,
-        }
-    }
+    /// Position in the string for completion if `Some`, else complete at the end if `None`.
+    pub position: Option<u16>,
+    /// String to complete. `None` is the same as the empty string.
+    pub data: Option<StringArgument>,
 }
 
 impl CommandType for CompletionCommand {
@@ -603,12 +545,6 @@ impl CommandType for TestCommand {
 /// identifier.
 pub struct PingCommand {
     pub argument: StringArgument,
-}
-
-impl PingCommand {
-    pub fn new(argument: StringArgument) -> Self {
-        Self { argument }
-    }
 }
 
 impl CommandType for PingCommand {
@@ -848,8 +784,14 @@ mod tests {
     fn test_handshake() {
         use crate::basic_types::Compression;
 
-        let default_handshake = HandshakeCommand::new(vec![], vec![]);
-        let compression_handshake = HandshakeCommand::new(vec![], vec![Compression::Zstd]);
+        let default_handshake = HandshakeCommand {
+            password_hash_algo: vec![],
+            compression: vec![],
+        };
+        let compression_handshake = HandshakeCommand {
+            password_hash_algo: vec![],
+            compression: vec![Compression::Zstd],
+        };
         let all_hash_algos = vec![
             PasswordHashAlgo::Plain,
             PasswordHashAlgo::Sha256,
@@ -857,10 +799,10 @@ mod tests {
             PasswordHashAlgo::Pbkdf2Sha256,
             PasswordHashAlgo::Pbkdf2Sha512,
         ];
-        let full_handshake = HandshakeCommand::new(
-            all_hash_algos,
-            vec![Compression::Zstd, Compression::Zlib, Compression::Off],
-        );
+        let full_handshake = HandshakeCommand {
+            password_hash_algo: all_hash_algos,
+            compression: vec![Compression::Zstd, Compression::Zlib, Compression::Off],
+        };
 
         let command = Command::new(None, default_handshake);
         assert_eq!(command.to_string(), "handshake\n");
@@ -882,14 +824,21 @@ mod tests {
 
     #[test]
     fn test_init() {
-        let normal_password = InitCommand::new(Some(literal_stringarg!("mypass")), None, None);
-        let password_with_commas =
-            InitCommand::new(Some(literal_stringarg!("mypass,with,commas")), None, None);
-        let password_with_totp = InitCommand::new(
-            Some(literal_stringarg!("mypass")),
-            None,
-            Some(literal_stringarg!("123456")),
-        );
+        let normal_password = InitCommand {
+            password: Some(literal_stringarg!("mypass")),
+            password_hash: None,
+            totp: None,
+        };
+        let password_with_commas = InitCommand {
+            password: Some(literal_stringarg!("mypass,with,commas")),
+            password_hash: None,
+            totp: None,
+        };
+        let password_with_totp = InitCommand {
+            password: Some(literal_stringarg!("mypass")),
+            password_hash: None,
+            totp: Some(literal_stringarg!("123456")),
+        };
 
         let salt = vec![
             0x85, 0xb1, 0xee, 0x00, 0x69, 0x5a, 0x5b, 0x25, 0x4e, 0x14, 0xf4, 0x88, 0x55, 0x38,
@@ -975,39 +924,39 @@ mod tests {
 
     #[test]
     fn test_hdata() {
-        let hdata_buffers = HdataCommand::new(
-            literal_stringarg!("buffer"),
-            Countable::new(
+        let hdata_buffers = HdataCommand {
+            name: literal_stringarg!("buffer"),
+            pointer: Countable::new(
                 Some(Count::Glob),
                 PointerOrName::Name(literal_stringarg!("gui_buffers")),
             ),
-            vec![],
-            vec![
+            vars: vec![],
+            keys: vec![
                 literal_stringarg!("number"),
                 literal_stringarg!("full_name"),
             ],
-        );
+        };
 
-        let hdata_lines = HdataCommand::new(
-            literal_stringarg!("buffer"),
-            Countable::new(None, PointerOrName::Name(literal_stringarg!("gui_buffers"))),
-            vec![
+        let hdata_lines = HdataCommand {
+            name: literal_stringarg!("buffer"),
+            pointer: Countable::new(None, PointerOrName::Name(literal_stringarg!("gui_buffers"))),
+            vars: vec![
                 Countable::new(None, literal_stringarg!("own_lines")),
                 Countable::new(Some(Count::Glob), literal_stringarg!("first_line")),
                 Countable::new(None, literal_stringarg!("data")),
             ],
-            vec![],
-        );
+            keys: vec![],
+        };
 
-        let hdata_hotlist = HdataCommand::new(
-            literal_stringarg!("hotlist"),
-            Countable::new(
+        let hdata_hotlist = HdataCommand {
+            name: literal_stringarg!("hotlist"),
+            pointer: Countable::new(
                 Some(Count::Glob),
                 PointerOrName::Name(literal_stringarg!("gui_hotlist")),
             ),
-            vec![],
-            vec![],
-        );
+            vars: vec![],
+            keys: vec![],
+        };
 
         let command = Command::new(Some(literal_stringarg!("hdata_buffers")), hdata_buffers);
         assert_eq!(
@@ -1030,14 +979,17 @@ mod tests {
 
     #[test]
     fn test_info() {
-        let info = InfoCommand::new(literal_stringarg!("version"), vec![]);
+        let info = InfoCommand {
+            name: literal_stringarg!("version"),
+            arguments: vec![],
+        };
         let command = Command::new(Some(literal_stringarg!("info_version")), info);
         assert_eq!(command.to_string(), "(info_version) info version\n");
 
-        let info = InfoCommand::new(
-            literal_stringarg!("nick_color"),
-            vec![literal_stringarg!("foo")],
-        );
+        let info = InfoCommand {
+            name: literal_stringarg!("nick_color"),
+            arguments: vec![literal_stringarg!("foo")],
+        };
         let command = Command::new(Some(literal_stringarg!("foo_color")), info);
         assert_eq!(command.to_string(), "(foo_color) info nick_color foo\n");
     }
@@ -1077,10 +1029,12 @@ mod tests {
 
     #[test]
     fn test_nicklist() {
-        let all_buffers = NicklistCommand::new(None);
-        let one_buffer = NicklistCommand::new(Some(PointerOrName::Name(literal_stringarg!(
-            "irc.libera.#weechat"
-        ))));
+        let all_buffers = NicklistCommand { buffer: None };
+        let one_buffer = NicklistCommand {
+            buffer: Some(PointerOrName::Name(literal_stringarg!(
+                "irc.libera.#weechat"
+            ))),
+        };
 
         let command = Command::new(Some(literal_stringarg!("nicklist_all")), all_buffers);
         assert_eq!(command.to_string(), "(nicklist_all) nicklist\n");
@@ -1094,15 +1048,15 @@ mod tests {
 
     #[test]
     fn test_input() {
-        let help = InputCommand::new(
-            PointerOrName::Name(literal_stringarg!("core.weechat")),
-            literal_stringarg!("/help filter"),
-        );
+        let help = InputCommand {
+            buffer: PointerOrName::Name(literal_stringarg!("core.weechat")),
+            data: literal_stringarg!("/help filter"),
+        };
 
-        let hello = InputCommand::new(
-            PointerOrName::Name(literal_stringarg!("irc.libera.#weechat")),
-            literal_stringarg!("hello!"),
-        );
+        let hello = InputCommand {
+            buffer: PointerOrName::Name(literal_stringarg!("irc.libera.#weechat")),
+            data: literal_stringarg!("hello!"),
+        };
 
         let command = Command::new(None, help);
         assert_eq!(command.to_string(), "input core.weechat /help filter\n");
@@ -1113,17 +1067,17 @@ mod tests {
 
     #[test]
     fn test_completion() {
-        let completion_help = CompletionCommand::new(
-            PointerOrName::Name(literal_stringarg!("core.weechat")),
-            None,
-            Some(literal_stringarg!("/help fi")),
-        );
+        let completion_help = CompletionCommand {
+            buffer: PointerOrName::Name(literal_stringarg!("core.weechat")),
+            position: None,
+            data: Some(literal_stringarg!("/help fi")),
+        };
 
-        let completion_query = CompletionCommand::new(
-            PointerOrName::Name(literal_stringarg!("core.weechat")),
-            Some(5),
-            Some(literal_stringarg!("/quernick")),
-        );
+        let completion_query = CompletionCommand {
+            buffer: PointerOrName::Name(literal_stringarg!("core.weechat")),
+            position: Some(5),
+            data: Some(literal_stringarg!("/quernick")),
+        };
 
         let command = Command::new(Some(literal_stringarg!("completion_help")), completion_help);
         assert_eq!(
@@ -1227,7 +1181,9 @@ mod tests {
 
     #[test]
     fn test_ping() {
-        let ping = PingCommand::new(literal_stringarg!("foo"));
+        let ping = PingCommand {
+            argument: literal_stringarg!("foo"),
+        };
         let command = Command::new(None, ping);
         assert_eq!(command.to_string(), "ping foo\n");
     }
