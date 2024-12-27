@@ -3,14 +3,14 @@ use weechat_relay_rs::basic_types::{Compression, PasswordHashAlgo, Pointer, Poin
 use weechat_relay_rs::commands::{
     CommandType, CompletionCommand, Count, Countable, DesyncCommand, DynCommand, HandshakeCommand,
     HdataCommand, InfoCommand, InfolistCommand, InitCommand, InputCommand, NicklistCommand,
-    PingCommand, PointerOrName, QuitCommand, StrArgument, SyncAllBuffers, SyncCommand,
-    SyncSomeBuffers, TestCommand, WeechatError,
+    PingCommand, PointerOrName, QuitCommand, SyncAllBuffers, SyncCommand, SyncSomeBuffers,
+    TestCommand,
 };
 use weechat_relay_rs::messages::{
     GenericHdata, Identifier, MessageType, Object, ObjectRef, WArray, WHashtable, WInfo, WInfolist,
     WString,
 };
-use weechat_relay_rs::Connection;
+use weechat_relay_rs::{Connection, WeechatError};
 
 use std::io::Write;
 use std::num::{ParseFloatError, ParseIntError};
@@ -41,6 +41,10 @@ struct Args {
     /// Set the timeout (in seconds) for waiting for a response
     #[arg(short, long)]
     timeout: Option<f64>,
+
+    /// Parse escape sequences in commands (only `\\` and `\n`; you should set a handshake too)
+    #[arg(short, long)]
+    escape: bool,
 }
 
 #[derive(Debug)]
@@ -87,7 +91,13 @@ fn main() {
             .set_read_timeout(Some(Duration::from_secs_f64(timeout)))
             .unwrap();
     }
-    let mut connection = Connection { stream };
+
+    let handshake = cli.handshake.map(|handshake| {
+        let handshake = handshake.unwrap_or_default();
+        parse_handshake_command(&handshake).unwrap()
+    });
+
+    let mut connection = Connection::new(stream, handshake).unwrap();
 
     let contents;
     let mut script = if let Some(script) = cli.script {
@@ -101,14 +111,6 @@ fn main() {
 
     let mut commands = vec![];
     let mut responses = 0;
-
-    if let Some(handshake) = cli.handshake {
-        let handshake = handshake.unwrap_or_default();
-        let command = parse_handshake_command(&handshake).unwrap().0.unwrap();
-        let command = DynCommand { id: None, command };
-        commands.push(command);
-        responses += 1;
-    }
 
     if let Some(init) = cli.init {
         let command = parse_init_command(&init).unwrap().0.unwrap();
@@ -159,7 +161,7 @@ fn main() {
             command_in
         };
 
-        let (command, more_responses) = parse_command(&command_in);
+        let (command, more_responses) = parse_command(&command_in, cli.escape);
         if let Some(command) = command {
             commands.push(command);
         }
@@ -167,17 +169,28 @@ fn main() {
     }
 }
 
-fn parse_command(input: &str) -> (Option<DynCommand>, u32) {
+fn parse_command(input: &str, escape: bool) -> (Option<DynCommand>, u32) {
     let (id, input) = if let Some(stripped) = input.strip_prefix('(') {
-        let (id, input) = stripped.split_once(')').unwrap();
-        let id = StrArgument::new(id).unwrap().to_stringargument();
-        (Some(id), input.trim_start())
+        let Some((id, input)) = stripped.split_once(')') else {
+            eprintln!("Malformed command: missing )");
+            return (None, 0);
+        };
+        (Some(id.to_string()), input.trim_start())
     } else {
         (None, input)
     };
-    let (command, args) = split_whitespace_once(input);
+
+    let (command, mut args) = split_out_args(input);
+    let escaped_args = if escape && !args.is_empty() {
+        Some(args.replace("\\n", "\n").replace("\\\\", "\\"))
+    } else {
+        None
+    };
+    if let Some(escaped_args) = &escaped_args {
+        args = escaped_args;
+    }
+
     let res: Result<(Option<Box<dyn CommandType>>, u32), InputError> = match command {
-        "handshake" => parse_handshake_command(args),
         "init" => parse_init_command(args),
         "hdata" => parse_hdata_command(args),
         "info" => parse_info_command(args),
@@ -208,7 +221,7 @@ fn parse_command(input: &str) -> (Option<DynCommand>, u32) {
     }
 }
 
-fn split_whitespace_once(s: &str) -> (&str, &str) {
+fn split_out_args(s: &str) -> (&str, &str) {
     match s.split_once(' ') {
         Some((s1, s2)) => (s1, s2.trim_start()),
         None => (s, ""),
@@ -233,44 +246,38 @@ fn parse_sleep_command(args: &str) -> Result<(Option<Box<dyn CommandType>>, u32)
     }
 }
 
-fn parse_handshake_command(args: &str) -> Result<(Option<Box<dyn CommandType>>, u32), InputError> {
+fn parse_handshake_command(args: &str) -> Result<HandshakeCommand, InputError> {
     let args = args.split_whitespace();
     let mut password_hash_algo = vec![PasswordHashAlgo::Plain];
-
-    fn parse_password_hash_algo(algo: &str) -> Result<PasswordHashAlgo, InputError> {
-        match algo {
-            "plain" => Ok(PasswordHashAlgo::Plain),
-            "sha256" => Ok(PasswordHashAlgo::Sha256),
-            "sha512" => Ok(PasswordHashAlgo::Sha512),
-            "pbkdf2+sha256" => Ok(PasswordHashAlgo::Pbkdf2Sha256),
-            "pbkdf2+sha512" => Ok(PasswordHashAlgo::Pbkdf2Sha512),
-            _ => Err(InputError::InvalidKeyVal),
-        }
-    }
+    let mut escape_commands = false;
 
     for arg in args {
-        let (key, val) = arg.split_once('=').ok_or(InputError::InvalidKeyVal)?;
-        if key == "password_hash_algo" {
-            password_hash_algo = val
-                .split(':')
-                .map(parse_password_hash_algo)
-                .collect::<Result<Vec<_>, _>>()?;
-        } else if key == "compression" {
-            eprintln!("Compression is not (yet) supported. Ignoring flag.")
-        } else {
-            return Err(InputError::InvalidKeyVal);
+        let keyval = arg.split_once('=').ok_or(InputError::InvalidKeyVal)?;
+        match keyval {
+            ("password_hash_algo", val) => {
+                password_hash_algo = val
+                    .split(':')
+                    .map(PasswordHashAlgo::parse)
+                    .collect::<Option<Vec<_>>>()
+                    .ok_or(InputError::InvalidKeyVal)?;
+            }
+            ("compression", _) => eprintln!("Compression is not (yet) supported. Ignoring flag."),
+            ("escape_commands", "on") => escape_commands = true,
+            ("escape_commands", "off") => escape_commands = false,
+            _ => return Err(InputError::InvalidKeyVal),
         }
     }
     let handshake = HandshakeCommand {
         password_hash_algo,
         compression: vec![Compression::Off],
+        escape_commands,
     };
-    Ok((Some(Box::new(handshake)), 1))
+    Ok(handshake)
 }
 
 fn parse_init_command(args: &str) -> Result<(Option<Box<dyn CommandType>>, u32), InputError> {
     let init = InitCommand {
-        password: Some(StrArgument::new(args)?.to_stringargument()),
+        password: Some(args.to_string()),
         password_hash: None,
         totp: None,
     };
@@ -297,37 +304,33 @@ fn parse_countable(s: &str) -> Result<Countable<&str>, InputError> {
 }
 
 fn parse_hdata_command(args: &str) -> Result<(Option<Box<dyn CommandType>>, u32), InputError> {
-    let split: Vec<&str> = args.split_whitespace().collect();
-    let (name, rpath) = split[0]
+    let mut split = args.split_whitespace();
+    let (name, rpath) = split
+        .next()
+        .ok_or(InputError::MissingArgument)?
         .split_once(':')
         .ok_or(InputError::MissingArgument)?;
-    let name = StrArgument::new(name)?.to_stringargument();
-    let mut rpath = rpath
-        .split('/')
-        .map(parse_countable)
-        .collect::<Result<Vec<_>, _>>()?
-        .into_iter();
+    let name = name.to_string();
+    let mut rpath = rpath.split('/').map(parse_countable);
 
-    let pointer = rpath.next().ok_or(InputError::MissingArgument)?;
+    let pointer = rpath.next().ok_or(InputError::MissingArgument)??;
     let pointer = Countable {
         count: pointer.count,
-        object: PointerOrName::Name(StrArgument::new(pointer.object)?.to_stringargument()),
+        object: PointerOrName::Name(pointer.object.to_string()),
     };
 
     let vars = rpath
         .map(|countable| {
+            let countable = countable?;
             Ok(Countable {
                 count: countable.count,
-                object: StrArgument::new(countable.object)?.to_stringargument(),
+                object: countable.object.to_string(),
             })
         })
-        .collect::<Result<Vec<_>, InputError>>()?;
+        .collect::<Result<_, InputError>>()?;
 
-    let keys = if split.len() > 1 {
-        split[1]
-            .split(',')
-            .map(|s| Ok(StrArgument::new(s)?.to_stringargument()))
-            .collect::<Result<Vec<_>, InputError>>()?
+    let keys = if let Some(s) = split.next() {
+        s.split(',').map(String::from).collect()
     } else {
         vec![]
     };
@@ -342,76 +345,49 @@ fn parse_hdata_command(args: &str) -> Result<(Option<Box<dyn CommandType>>, u32)
 }
 
 fn parse_info_command(args: &str) -> Result<(Option<Box<dyn CommandType>>, u32), InputError> {
-    let split: Vec<&str> = args.split_whitespace().collect();
-    let arguments = if split.len() > 1 {
-        split[1..]
-            .iter()
-            .map(|a| Ok(StrArgument::new(a)?.to_stringargument()))
-            .collect::<Result<Vec<_>, InputError>>()?
-    } else {
-        vec![]
-    };
-    let info = InfoCommand {
-        name: StrArgument::new(split[0])?.to_stringargument(),
-        arguments,
-    };
+    let mut split = args.split_whitespace().map(String::from);
+    let name = split.next().ok_or(InputError::MissingArgument)?;
+    let arguments = split.collect();
+    let info = InfoCommand { name, arguments };
     Ok((Some(Box::new(info)), 1))
 }
 
 fn parse_infolist_command(args: &str) -> Result<(Option<Box<dyn CommandType>>, u32), InputError> {
-    let split: Vec<&str> = args.split_whitespace().collect();
-    let pointer = if split.len() > 1 {
-        Some(Pointer::new(split[1].as_bytes().to_vec())?)
-    } else {
-        None
-    };
-    let arguments = if split.len() > 2 {
-        split[2..]
-            .iter()
-            .map(|a| Ok(StrArgument::new(a)?.to_stringargument()))
-            .collect::<Result<Vec<_>, InputError>>()?
-    } else {
-        vec![]
-    };
-    let info = InfolistCommand::new(
-        StrArgument::new(split[0])?.to_stringargument(),
-        pointer,
-        arguments,
-    );
+    let mut split = args.split_whitespace().map(String::from);
+    let name = split.next().ok_or(InputError::MissingArgument)?;
+    let pointer = split
+        .next()
+        .map(|p| Pointer::new(p.as_bytes().to_vec()))
+        .transpose()?;
+    let arguments = split.collect();
+    let info = InfolistCommand::new(name, pointer, arguments);
     Ok((Some(Box::new(info)), 1))
 }
 
 fn parse_nicklist_command(args: &str) -> Result<(Option<Box<dyn CommandType>>, u32), InputError> {
-    let split: Vec<&str> = args.split_whitespace().collect();
-    let buffer = if !split.is_empty() {
-        Some(PointerOrName::Name(
-            StrArgument::new(split[0])?.to_stringargument(),
-        ))
-    } else {
-        None
-    };
+    let buffer = args
+        .split_whitespace()
+        .next()
+        .map(|s| PointerOrName::Name(s.to_string()));
     let nicklist = NicklistCommand { buffer };
     Ok((Some(Box::new(nicklist)), 1))
 }
 
 fn parse_input_command(args: &str) -> Result<(Option<Box<dyn CommandType>>, u32), InputError> {
     let (buffer, data) = args.split_once(' ').ok_or(InputError::MissingArgument)?;
-    let buffer = PointerOrName::Name(StrArgument::new(buffer)?.to_stringargument());
-    let data = StrArgument::new(data.trim_start())?.to_stringargument();
+    let buffer = PointerOrName::Name(buffer.to_string());
+    let data = data.to_string();
     let input = InputCommand { buffer, data };
     Ok((Some(Box::new(input)), 0))
 }
 
 fn parse_completion_command(args: &str) -> Result<(Option<Box<dyn CommandType>>, u32), InputError> {
     let (buffer, args) = args.split_once(' ').ok_or(InputError::MissingArgument)?;
-    let buffer = PointerOrName::Name(StrArgument::new(buffer)?.to_stringargument());
+    let buffer = PointerOrName::Name(buffer.to_string());
     let args = args.trim_start();
 
     let (position, data) = if let Some((position, args)) = args.split_once(' ') {
-        (
-            position,
-            Some(StrArgument::new(args.trim_start())?.to_stringargument()),
-        )
+        (position, Some(args.trim_start().to_string()))
     } else {
         (args, None)
     };
@@ -466,12 +442,8 @@ fn parse_sync_command(args: &str) -> Result<(Option<Box<dyn CommandType>>, u32),
             (args.split(','), SyncSomeBuffers::All)
         };
         let buffers = buffers
-            .map(|s| {
-                Ok(PointerOrName::Name(
-                    StrArgument::new(s)?.to_stringargument(),
-                ))
-            })
-            .collect::<Result<Vec<_>, InputError>>()?;
+            .map(|s| PointerOrName::Name(s.to_string()))
+            .collect();
         SyncCommand::SomeBuffers(buffers, options)
     };
 
@@ -514,12 +486,8 @@ fn parse_desync_command(args: &str) -> Result<(Option<Box<dyn CommandType>>, u32
             (args.split(','), SyncSomeBuffers::All)
         };
         let buffers = buffers
-            .map(|s| {
-                Ok(PointerOrName::Name(
-                    StrArgument::new(s)?.to_stringargument(),
-                ))
-            })
-            .collect::<Result<Vec<_>, InputError>>()?;
+            .map(|s| PointerOrName::Name(s.to_string()))
+            .collect();
         DesyncCommand::SomeBuffers(buffers, options)
     };
 
@@ -533,7 +501,7 @@ fn parse_test_command(_args: &str) -> Result<(Option<Box<dyn CommandType>>, u32)
 
 fn parse_ping_command(args: &str) -> Result<(Option<Box<dyn CommandType>>, u32), InputError> {
     let ping = PingCommand {
-        argument: StrArgument::new(args)?.to_stringargument(),
+        argument: args.to_string(),
     };
     Ok((Some(Box::new(ping)), 1))
 }
@@ -550,7 +518,7 @@ fn print_message(object: &Object) {
 
 struct WrappedObject<'a>(ObjectRef<'a>);
 
-impl<'a> std::fmt::Display for WrappedObject<'a> {
+impl std::fmt::Display for WrappedObject<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.0 {
             ObjectRef::Chr(o) => write!(f, "chr: {}", o),
@@ -669,7 +637,7 @@ fn fmt_arr(arr: &WArray, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 
 struct WrappedId<'a>(&'a Identifier);
 
-impl<'a> std::fmt::Display for WrappedId<'a> {
+impl std::fmt::Display for WrappedId<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.0 {
             Identifier::Client(bytes) => write!(f, "{}", String::from_utf8_lossy(bytes)),

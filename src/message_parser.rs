@@ -63,6 +63,17 @@ pub enum ParseMessageError<E> {
     Parser(nom::Err<E>),
 }
 
+impl<E: std::fmt::Debug> std::fmt::Display for ParseMessageError<E> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Network(m, e) => writeln!(f, "{}: {}", m, e),
+            Self::Parser(e) => writeln!(f, "failed to parse message: {}", e),
+        }
+    }
+}
+
+impl<E: std::fmt::Debug> std::error::Error for ParseMessageError<E> {}
+
 pub fn get_message(
     stream: &mut TcpStream,
 ) -> Result<Message, ParseMessageError<nom::error::Error<Vec<u8>>>> {

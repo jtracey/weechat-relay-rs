@@ -2,144 +2,77 @@ pub use crate::basic_types::{Compression, PasswordHashAlgo, Pointer};
 
 use std::fmt::Write;
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum WeechatError {
-    NewlineInArgument,
-}
-
-/// A [`String`] that has been checked for invalid argument representations.
-///
-/// The checks are for basic validity, in the sense that using this as an argument will not cause
-/// malformed commands at the protocol level (improper or incorrect arguments are still possible,
-/// but they won't break the protocol itself). Currently, this only implies that the argument is a
-/// valid string, and that it contains no newlines.
-#[derive(Debug, Clone)]
-pub struct StringArgument(String);
-
-/// A [`&str`] that has been checked for invalid argument representations. See [`StringArgument`].
-#[derive(Debug)]
-pub struct StrArgument<'a>(&'a str);
-
-impl StringArgument {
-    /// Create a new [`StringArgument`], returning an error if it fails any checks.
-    pub fn new(string: String) -> Result<Self, WeechatError> {
-        if string.contains('\n') {
-            return Err(WeechatError::NewlineInArgument);
-        }
-        Ok(Self(string))
-    }
-
-    /// Create a new [`Option<StringArgument>`] from an [`Option<String>`], returning an error it if
-    /// fails any checks.
-    pub fn option_new(string: Option<String>) -> Result<Option<Self>, WeechatError> {
-        string.map(Self::new).map_or(Ok(None), |s| s.map(Some))
-    }
-}
-
-/// Create a [`StringArgument`] from a string literal (i.e., a [`&'static str`](str)).
-///
-/// The underlying [`String`] is allocated at runtime, but the correctness checks are performed at
-/// compile time.
-#[macro_export]
-macro_rules! literal_stringarg {
-    ($string:expr) => {{
-        const STR_ARG: StrArgument = StrArgument::const_new($string);
-        STR_ARG.to_stringargument()
-    }};
-}
-
-impl std::fmt::Display for StringArgument {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.fmt(f)
-    }
-}
-
-impl<'a> StrArgument<'a> {
-    /// Create a new [`StrArgument`], returning an error if it fails any checks.
-    pub fn new(string: &'a str) -> Result<Self, WeechatError> {
-        if string.contains('\n') {
-            return Err(WeechatError::NewlineInArgument);
-        }
-        Ok(Self(string))
-    }
-
-    /// Create a new [`Option<StrArgument>`] from an [`Option<&str>`], returning an error it if
-    /// fails any checks.
-    pub fn option_new(string: Option<&'a str>) -> Result<Option<Self>, WeechatError> {
-        string.map(Self::new).map_or(Ok(None), |s| s.map(Some))
-    }
-
-    /// The same as [`new`](StrArgument::new), but const (i.e., validity checks can be performed at
-    /// compile-time). This could be called at runtime too, but because bad arguments would cause
-    /// assertion failures rather than returning an error, it is strongly advised to not be.
-    pub const fn const_new(string: &'static str) -> Self {
-        let bytes = string.as_bytes();
-        let mut i = 0;
-        while i < string.len() {
-            let c = bytes[i];
-            assert!(c != b'\n', "{}", string);
-            i += 1;
-        }
-        Self(string)
-    }
-
-    /// Converts to a [`StringArgument`].
-    pub fn to_stringargument(self) -> StringArgument {
-        StringArgument(self.0.to_string())
-    }
-}
-
-impl<'a> std::fmt::Display for StrArgument<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.fmt(f)
-    }
-}
-
 /// A particular command, ready for sending.
 pub struct Command<T: CommandType> {
-    pub id: Option<StringArgument>,
+    pub id: Option<String>,
     pub command: T,
 }
 
 /// Some abstracted command, ready for sending.
 pub struct DynCommand {
-    pub id: Option<StringArgument>,
+    pub id: Option<String>,
     pub command: Box<dyn CommandType>,
 }
 
 impl<T: CommandType> Command<T> {
-    pub fn new(id: Option<StringArgument>, command: T) -> Self {
+    pub fn new(id: Option<String>, command: T) -> Self {
         Command { id, command }
     }
 }
 
 impl<T: CommandType> std::fmt::Display for Command<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut fields = vec![self.command.command().to_string()];
-
-        let id = self.id.as_ref().map(|id| format!("({})", id));
-        if let Some(id_str) = id {
-            fields.insert(0, id_str);
-        };
-
+        let mut fields = Vec::with_capacity(2 + self.command.arguments().len());
+        if let Some(id) = &self.id {
+            fields.push(format!("({})", id));
+        }
+        fields.push(self.command.command().to_string());
         fields.extend(self.command.arguments());
-
         writeln!(f, "{}", fields.join(" "))
     }
 }
 
 impl std::fmt::Display for DynCommand {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut fields = vec![self.command.command().to_string()];
+        if let Some(ref id) = self.id {
+            writeln!(f, "({}) {}", id, self.command)
+        } else {
+            self.command.fmt(f)
+        }
+    }
+}
 
-        let id = self.id.as_ref().map(|id| format!("({})", id));
-        if let Some(id_str) = id {
-            fields.insert(0, id_str);
-        };
+macro_rules! escaped {
+    ($self:ident) => {{
+        let mut fields = Vec::with_capacity(2 + $self.command.arguments().len());
+        if let Some(id) = &$self.id {
+            fields.push(format!("({})", id));
+        }
+        fields.push($self.command.command().to_string());
 
-        fields.extend(self.command.arguments());
+        fields.extend(
+            $self
+                .command
+                .arguments()
+                .iter()
+                .map(|s| s.replace('\\', "\\\\").replace('\n', "\\n")),
+        );
 
-        writeln!(f, "{}", fields.join(" "))
+        let mut ret = fields.join(" ");
+        ret.push('\n');
+        ret
+    }};
+}
+
+impl<T: CommandType> Command<T> {
+    pub fn escaped(&self) -> String {
+        escaped!(self)
+    }
+}
+
+impl DynCommand {
+    pub fn escaped(&self) -> String {
+        escaped!(self)
     }
 }
 
@@ -148,19 +81,34 @@ pub trait CommandType {
     fn arguments(&self) -> Vec<String>;
 }
 
+impl std::fmt::Display for dyn CommandType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut fields = Vec::with_capacity(1 + self.arguments().len());
+        fields.push(self.command().to_string());
+        fields.extend(self.arguments());
+        writeln!(f, "{}", fields.join(" "))
+    }
+}
+
 /// The [handshake
 /// command](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#command_handshake),
 /// sent before anything else in a session.
 ///
+/// The handshake should be performed using [`Connection::new`](crate::Connection::new).
+///
 /// Response: [Hashtable](crate::messages::WHashtable)
+#[derive(Debug)]
 pub struct HandshakeCommand {
     /// List of password hash algorithms this client is willing to accept.
     pub password_hash_algo: Vec<PasswordHashAlgo>,
     /// List of compresion algorithms this client is willing to accept.
     pub compression: Vec<Compression>,
+    /// Whether commands sent should be escaped, allowing them to span multiple lines.
+    pub escape_commands: bool,
 }
 
-impl CommandType for HandshakeCommand {
+// we don't want to implement CommandType, else a Connection could establish that contradicts its parameters
+impl HandshakeCommand {
     fn command(&self) -> &'static str {
         "handshake"
     }
@@ -187,11 +135,23 @@ impl CommandType for HandshakeCommand {
                     .join(":")
             ));
         }
+        if self.escape_commands {
+            ret.push("escape_commands=on".to_string());
+        }
         if ret.is_empty() {
             vec![]
         } else {
             vec![ret.join(",")]
         }
+    }
+}
+
+impl std::fmt::Display for HandshakeCommand {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut fields = Vec::with_capacity(1 + self.arguments().len());
+        fields.push(self.command().to_string());
+        fields.extend(self.arguments());
+        writeln!(f, "{}", fields.join(" "))
     }
 }
 
@@ -202,11 +162,11 @@ impl CommandType for HandshakeCommand {
 /// Response: None
 pub struct InitCommand {
     /// Plaintext password authenticator. Probably mutually exclusive with `password_hash`.
-    pub password: Option<StringArgument>,
+    pub password: Option<String>,
     /// Hashed password. Probably mutually exclusive with `password`.
     pub password_hash: Option<PasswordHash>,
     /// Time-based One-Time Password. Typically combined with one of `password` or `password_hash`.
-    pub totp: Option<StringArgument>,
+    pub totp: Option<String>,
 }
 
 impl CommandType for InitCommand {
@@ -215,8 +175,8 @@ impl CommandType for InitCommand {
     }
 
     fn arguments(&self) -> Vec<String> {
-        fn escape(arg: &StringArgument) -> String {
-            arg.0.replace(',', "\\,")
+        fn escape(arg: &str) -> String {
+            arg.replace(',', "\\,")
         }
         let mut ret = vec![];
         let pw_hash: String;
@@ -241,14 +201,14 @@ impl CommandType for InitCommand {
 /// Response: [Hdata](crate::messages::GenericHdata)
 pub struct HdataCommand {
     /// The name of the requested hdata.
-    pub name: StringArgument,
+    pub name: String,
     /// A pointer or list name, forming the root of the path to the requested variable.
     pub pointer: Countable<PointerOrName>,
     /// A list of variable names that, with the pointer root, form the path to the requested
     /// variable (the last in the path).
-    pub vars: Vec<Countable<StringArgument>>,
+    pub vars: Vec<Countable<String>>,
     /// A list of keys to return in the hdata. An empty list returns all keys.
-    pub keys: Vec<StringArgument>,
+    pub keys: Vec<String>,
 }
 
 impl HdataCommand {
@@ -281,7 +241,7 @@ impl CommandType for HdataCommand {
             args.push(
                 self.keys
                     .iter()
-                    .map(|s| s.0.as_str())
+                    .map(|s| s.as_str())
                     .collect::<Vec<&str>>()
                     .join(","),
             );
@@ -297,9 +257,9 @@ impl CommandType for HdataCommand {
 /// Response: [Info](crate::messages::WInfo)
 pub struct InfoCommand {
     /// Name of the info being requested.
-    pub name: StringArgument,
+    pub name: String,
     /// Arguments to the info request.
-    pub arguments: Vec<StringArgument>,
+    pub arguments: Vec<String>,
 }
 
 impl CommandType for InfoCommand {
@@ -308,8 +268,8 @@ impl CommandType for InfoCommand {
     }
 
     fn arguments(&self) -> Vec<String> {
-        let mut ret = vec![self.name.0.clone()];
-        ret.extend(self.arguments.iter().map(|s| s.0.clone()));
+        let mut ret = vec![self.name.clone()];
+        ret.extend(self.arguments.iter().cloned());
         ret
     }
 }
@@ -320,12 +280,12 @@ impl CommandType for InfoCommand {
 ///
 /// Response: [Infolist](crate::messages::WInfolist)
 pub struct InfolistCommand {
-    name: StringArgument,
+    name: String,
     // As of version 3.7 of the WeeChat Relay Protocol, if there are
     // any arguments, the first argument *must* be a Pointer.
     // Arguments to infolists without pointers can be accessed using a
     // NULL pointer.
-    arguments: Option<(Pointer, Vec<StringArgument>)>,
+    arguments: Option<(Pointer, Vec<String>)>,
 }
 
 impl InfolistCommand {
@@ -334,11 +294,7 @@ impl InfolistCommand {
     /// `name`: The name of the infolist being requested.
     ///
     /// `arguments`: Arguments to the infolist request.
-    pub fn new(
-        name: StringArgument,
-        pointer: Option<Pointer>,
-        arguments: Vec<StringArgument>,
-    ) -> Self {
+    pub fn new(name: String, pointer: Option<Pointer>, arguments: Vec<String>) -> Self {
         let arguments = match (pointer, !arguments.is_empty()) {
             (None, false) => None,
             (Some(p), _) => Some((p, arguments)),
@@ -354,10 +310,10 @@ impl CommandType for InfolistCommand {
     }
 
     fn arguments(&self) -> Vec<String> {
-        let mut ret = vec![self.name.0.clone()];
+        let mut ret = vec![self.name.clone()];
         if let Some(arguments) = &self.arguments {
             ret.push(arguments.0.to_string());
-            ret.extend(arguments.1.iter().map(|s| s.0.clone()));
+            ret.extend(arguments.1.iter().cloned());
         }
         ret
     }
@@ -395,7 +351,7 @@ pub struct InputCommand {
     /// Pointer to or full name of the buffer.
     pub buffer: PointerOrName,
     /// String to input to the buffer.
-    pub data: StringArgument,
+    pub data: String,
 }
 
 impl CommandType for InputCommand {
@@ -404,7 +360,7 @@ impl CommandType for InputCommand {
     }
 
     fn arguments(&self) -> Vec<String> {
-        vec![self.buffer.to_string(), self.data.0.clone()]
+        vec![self.buffer.to_string(), self.data.clone()]
     }
 }
 
@@ -422,7 +378,7 @@ pub struct CompletionCommand {
     /// Position in the string for completion if `Some`, else complete at the end if `None`.
     pub position: Option<u16>,
     /// String to complete. `None` is the same as the empty string.
-    pub data: Option<StringArgument>,
+    pub data: Option<String>,
 }
 
 impl CommandType for CompletionCommand {
@@ -437,7 +393,7 @@ impl CommandType for CompletionCommand {
         };
         let mut ret = vec![self.buffer.to_string(), position];
         if let Some(data) = &self.data {
-            ret.push(data.0.clone());
+            ret.push(data.clone());
         }
         ret
     }
@@ -544,7 +500,7 @@ impl CommandType for TestCommand {
 /// Response: [String](crate::messages::WString), with [Pong](crate::messages::Event::Pong)
 /// identifier.
 pub struct PingCommand {
-    pub argument: StringArgument,
+    pub argument: String,
 }
 
 impl CommandType for PingCommand {
@@ -552,7 +508,7 @@ impl CommandType for PingCommand {
         "ping"
     }
     fn arguments(&self) -> Vec<String> {
-        vec![self.argument.0.clone()]
+        vec![self.argument.clone()]
     }
 }
 
@@ -730,7 +686,7 @@ impl<T: std::fmt::Display> std::fmt::Display for Countable<T> {
 /// A [`Pointer`] or name in root of the path of an [`HdataCommand`].
 pub enum PointerOrName {
     Pointer(Pointer),
-    Name(StringArgument),
+    Name(String),
 }
 
 impl std::fmt::Display for PointerOrName {
@@ -746,38 +702,6 @@ impl std::fmt::Display for PointerOrName {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_string_argument() {
-        let good_string = StrArgument::new("foo").expect("Failed to unwrap StringArgument");
-        assert_eq!(good_string.to_string(), "foo");
-
-        let bad_string = StrArgument::new("foo\nbar").expect_err("Bad argument didn't err");
-        assert_eq!(bad_string, WeechatError::NewlineInArgument);
-
-        const GOOD_STRING: StrArgument = StrArgument::const_new("foo");
-        assert_eq!(GOOD_STRING.to_string(), "foo");
-
-        // should fail to compile
-        //const BAD_STRING: StrArgument = StrArgument::const_new("foo\nbar");
-
-        let good_string = good_string.to_stringargument();
-        assert_eq!(good_string.to_string(), "foo");
-
-        let good_string =
-            StringArgument::new("foo".to_string()).expect("Failed to unwrap StringArgument");
-        assert_eq!(good_string.to_string(), "foo");
-
-        let bad_string =
-            StringArgument::new("foo\nbar".to_string()).expect_err("Bad argument didn't err");
-        assert_eq!(bad_string, WeechatError::NewlineInArgument);
-
-        let good_string = literal_stringarg!("foo");
-        assert_eq!(good_string.to_string(), "foo");
-
-        // should fail to compile
-        //let bad_string = literal_stringarg!("foo\nbar");
-    }
-
     // n.b. these tests only test the string commands they create,
     // not any kind of interaction with a server
     #[test]
@@ -787,10 +711,12 @@ mod tests {
         let default_handshake = HandshakeCommand {
             password_hash_algo: vec![],
             compression: vec![],
+            escape_commands: false,
         };
         let compression_handshake = HandshakeCommand {
             password_hash_algo: vec![],
             compression: vec![Compression::Zstd],
+            escape_commands: false,
         };
         let all_hash_algos = vec![
             PasswordHashAlgo::Plain,
@@ -802,42 +728,38 @@ mod tests {
         let full_handshake = HandshakeCommand {
             password_hash_algo: all_hash_algos,
             compression: vec![Compression::Zstd, Compression::Zlib, Compression::Off],
+            escape_commands: false,
         };
 
-        let command = Command::new(None, default_handshake);
-        assert_eq!(command.to_string(), "handshake\n");
-
-        let command = Command::new(None, compression_handshake);
-        assert_eq!(command.to_string(), "handshake compression=zstd\n");
-
-        let command = Command::new(
-            Some(StrArgument::const_new("Foo").to_stringargument()),
-            full_handshake,
+        assert_eq!(default_handshake.to_string(), "handshake\n");
+        assert_eq!(
+            compression_handshake.to_string(),
+            "handshake compression=zstd\n"
         );
         // FIXME: we shouldn't be testing the order of the options here,
         // but should make sure however we end up testing checks for proper formatting
         assert_eq!(
-            command.to_string(),
-            "(Foo) handshake password_hash_algo=plain:sha256:sha512:pbkdf2+sha256:pbkdf2+sha512,compression=zstd:zlib:off\n"
+            full_handshake.to_string(),
+            "handshake password_hash_algo=plain:sha256:sha512:pbkdf2+sha256:pbkdf2+sha512,compression=zstd:zlib:off\n"
         );
     }
 
     #[test]
     fn test_init() {
         let normal_password = InitCommand {
-            password: Some(literal_stringarg!("mypass")),
+            password: Some("mypass".to_string()),
             password_hash: None,
             totp: None,
         };
         let password_with_commas = InitCommand {
-            password: Some(literal_stringarg!("mypass,with,commas")),
+            password: Some("mypass,with,commas".to_string()),
             password_hash: None,
             totp: None,
         };
         let password_with_totp = InitCommand {
-            password: Some(literal_stringarg!("mypass")),
+            password: Some("mypass".to_string()),
             password_hash: None,
-            totp: Some(literal_stringarg!("123456")),
+            totp: Some("123456".to_string()),
         };
 
         let salt = vec![
@@ -925,52 +847,49 @@ mod tests {
     #[test]
     fn test_hdata() {
         let hdata_buffers = HdataCommand {
-            name: literal_stringarg!("buffer"),
+            name: "buffer".to_string(),
             pointer: Countable::new(
                 Some(Count::Glob),
-                PointerOrName::Name(literal_stringarg!("gui_buffers")),
+                PointerOrName::Name("gui_buffers".to_string()),
             ),
             vars: vec![],
-            keys: vec![
-                literal_stringarg!("number"),
-                literal_stringarg!("full_name"),
-            ],
+            keys: vec!["number".to_string(), "full_name".to_string()],
         };
 
         let hdata_lines = HdataCommand {
-            name: literal_stringarg!("buffer"),
-            pointer: Countable::new(None, PointerOrName::Name(literal_stringarg!("gui_buffers"))),
+            name: "buffer".to_string(),
+            pointer: Countable::new(None, PointerOrName::Name("gui_buffers".to_string())),
             vars: vec![
-                Countable::new(None, literal_stringarg!("own_lines")),
-                Countable::new(Some(Count::Glob), literal_stringarg!("first_line")),
-                Countable::new(None, literal_stringarg!("data")),
+                Countable::new(None, "own_lines".to_string()),
+                Countable::new(Some(Count::Glob), "first_line".to_string()),
+                Countable::new(None, "data".to_string()),
             ],
             keys: vec![],
         };
 
         let hdata_hotlist = HdataCommand {
-            name: literal_stringarg!("hotlist"),
+            name: "hotlist".to_string(),
             pointer: Countable::new(
                 Some(Count::Glob),
-                PointerOrName::Name(literal_stringarg!("gui_hotlist")),
+                PointerOrName::Name("gui_hotlist".to_string()),
             ),
             vars: vec![],
             keys: vec![],
         };
 
-        let command = Command::new(Some(literal_stringarg!("hdata_buffers")), hdata_buffers);
+        let command = Command::new(Some("hdata_buffers".to_string()), hdata_buffers);
         assert_eq!(
             command.to_string(),
             "(hdata_buffers) hdata buffer:gui_buffers(*) number,full_name\n"
         );
 
-        let command = Command::new(Some(literal_stringarg!("hdata_lines")), hdata_lines);
+        let command = Command::new(Some("hdata_lines".to_string()), hdata_lines);
         assert_eq!(
             command.to_string(),
             "(hdata_lines) hdata buffer:gui_buffers/own_lines/first_line(*)/data\n"
         );
 
-        let command = Command::new(Some(literal_stringarg!("hdata_hotlist")), hdata_hotlist);
+        let command = Command::new(Some("hdata_hotlist".to_string()), hdata_hotlist);
         assert_eq!(
             command.to_string(),
             "(hdata_hotlist) hdata hotlist:gui_hotlist(*)\n"
@@ -980,26 +899,26 @@ mod tests {
     #[test]
     fn test_info() {
         let info = InfoCommand {
-            name: literal_stringarg!("version"),
+            name: "version".to_string(),
             arguments: vec![],
         };
-        let command = Command::new(Some(literal_stringarg!("info_version")), info);
+        let command = Command::new(Some("info_version".to_string()), info);
         assert_eq!(command.to_string(), "(info_version) info version\n");
 
         let info = InfoCommand {
-            name: literal_stringarg!("nick_color"),
-            arguments: vec![literal_stringarg!("foo")],
+            name: "nick_color".to_string(),
+            arguments: vec!["foo".to_string()],
         };
-        let command = Command::new(Some(literal_stringarg!("foo_color")), info);
+        let command = Command::new(Some("foo_color".to_string()), info);
         assert_eq!(command.to_string(), "(foo_color) info nick_color foo\n");
     }
 
     #[test]
     fn test_infolist() {
-        let id = literal_stringarg!("infolist_buffer");
-        let name = literal_stringarg!("buffer");
+        let id = "infolist_buffer".to_string();
+        let name = "buffer".to_string();
         let pointer = Pointer::new("1234abcd".as_bytes().to_vec()).expect("invalid pointer");
-        let arguments = vec![literal_stringarg!("core.weechat")];
+        let arguments = vec!["core.weechat".to_string()];
 
         let infolist_buffer = InfolistCommand::new(name.clone(), None, vec![]);
         let command = Command::new(Some(id.clone()), infolist_buffer);
@@ -1031,15 +950,13 @@ mod tests {
     fn test_nicklist() {
         let all_buffers = NicklistCommand { buffer: None };
         let one_buffer = NicklistCommand {
-            buffer: Some(PointerOrName::Name(literal_stringarg!(
-                "irc.libera.#weechat"
-            ))),
+            buffer: Some(PointerOrName::Name("irc.libera.#weechat".to_string())),
         };
 
-        let command = Command::new(Some(literal_stringarg!("nicklist_all")), all_buffers);
+        let command = Command::new(Some("nicklist_all".to_string()), all_buffers);
         assert_eq!(command.to_string(), "(nicklist_all) nicklist\n");
 
-        let command = Command::new(Some(literal_stringarg!("nicklist_weechat")), one_buffer);
+        let command = Command::new(Some("nicklist_weechat".to_string()), one_buffer);
         assert_eq!(
             command.to_string(),
             "(nicklist_weechat) nicklist irc.libera.#weechat\n"
@@ -1049,13 +966,13 @@ mod tests {
     #[test]
     fn test_input() {
         let help = InputCommand {
-            buffer: PointerOrName::Name(literal_stringarg!("core.weechat")),
-            data: literal_stringarg!("/help filter"),
+            buffer: PointerOrName::Name("core.weechat".to_string()),
+            data: "/help filter".to_string(),
         };
 
         let hello = InputCommand {
-            buffer: PointerOrName::Name(literal_stringarg!("irc.libera.#weechat")),
-            data: literal_stringarg!("hello!"),
+            buffer: PointerOrName::Name("irc.libera.#weechat".to_string()),
+            data: "hello!".to_string(),
         };
 
         let command = Command::new(None, help);
@@ -1068,27 +985,24 @@ mod tests {
     #[test]
     fn test_completion() {
         let completion_help = CompletionCommand {
-            buffer: PointerOrName::Name(literal_stringarg!("core.weechat")),
+            buffer: PointerOrName::Name("core.weechat".to_string()),
             position: None,
-            data: Some(literal_stringarg!("/help fi")),
+            data: Some("/help fi".to_string()),
         };
 
         let completion_query = CompletionCommand {
-            buffer: PointerOrName::Name(literal_stringarg!("core.weechat")),
+            buffer: PointerOrName::Name("core.weechat".to_string()),
             position: Some(5),
-            data: Some(literal_stringarg!("/quernick")),
+            data: Some("/quernick".to_string()),
         };
 
-        let command = Command::new(Some(literal_stringarg!("completion_help")), completion_help);
+        let command = Command::new(Some("completion_help".to_string()), completion_help);
         assert_eq!(
             command.to_string(),
             "(completion_help) completion core.weechat -1 /help fi\n"
         );
 
-        let command = Command::new(
-            Some(literal_stringarg!("completion_query")),
-            completion_query,
-        );
+        let command = Command::new(Some("completion_query".to_string()), completion_query);
         assert_eq!(
             command.to_string(),
             "(completion_query) completion core.weechat 5 /quernick\n"
@@ -1105,14 +1019,12 @@ mod tests {
         });
 
         let core_buffer = SyncCommand::SomeBuffers(
-            vec![PointerOrName::Name(literal_stringarg!("core.buffer"))],
+            vec![PointerOrName::Name("core.buffer".to_string())],
             SyncSomeBuffers::All,
         );
 
         let without_nicklist = SyncCommand::SomeBuffers(
-            vec![PointerOrName::Name(literal_stringarg!(
-                "irc.libera.#weechat"
-            ))],
+            vec![PointerOrName::Name("irc.libera.#weechat".to_string())],
             SyncSomeBuffers::Buffer,
         );
 
@@ -1149,16 +1061,12 @@ mod tests {
         });
 
         let nicklist = DesyncCommand::SomeBuffers(
-            vec![PointerOrName::Name(literal_stringarg!(
-                "irc.libera.#weechat"
-            ))],
+            vec![PointerOrName::Name("irc.libera.#weechat".to_string())],
             SyncSomeBuffers::Nicklist,
         );
 
         let all_signals = DesyncCommand::SomeBuffers(
-            vec![PointerOrName::Name(literal_stringarg!(
-                "irc.libera.#weechat"
-            ))],
+            vec![PointerOrName::Name("irc.libera.#weechat".to_string())],
             SyncSomeBuffers::All,
         );
 
@@ -1182,7 +1090,7 @@ mod tests {
     #[test]
     fn test_ping() {
         let ping = PingCommand {
-            argument: literal_stringarg!("foo"),
+            argument: "foo".to_string(),
         };
         let command = Command::new(None, ping);
         assert_eq!(command.to_string(), "ping foo\n");

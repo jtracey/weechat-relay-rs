@@ -30,7 +30,7 @@ pub enum PointerError {
 
 impl Pointer {
     pub fn new(ascii_bytes: Vec<u8>) -> Result<Pointer, PointerError> {
-        let ascii_bytes = if ascii_bytes.starts_with(&[b'0', b'x']) {
+        let ascii_bytes = if ascii_bytes.starts_with(b"0x") {
             ascii_bytes[2..].to_vec()
         } else {
             ascii_bytes
@@ -88,9 +88,24 @@ impl Compression {
             Compression::Zstd => "zstd",
         }
     }
+
+    /// Parse the given `&str` into a Compression setting.
+    ///
+    /// The given string must be one of the strings listed in the Weechat Relay
+    /// [handshake docs](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#command_handshake),
+    /// else this will return `None`.
+    pub fn parse(compression: &str) -> Option<Self> {
+        match compression {
+            "off" => Some(Compression::Off),
+            "zlib" => Some(Compression::Zlib),
+            "zstd" => Some(Compression::Zstd),
+            _ => None,
+        }
+    }
 }
 
 /// A password hash algorithm.
+#[derive(Debug, PartialEq, Eq)]
 pub enum PasswordHashAlgo {
     Plain,
     Sha256,
@@ -107,6 +122,22 @@ impl PasswordHashAlgo {
             PasswordHashAlgo::Sha512 => "sha512",
             PasswordHashAlgo::Pbkdf2Sha256 => "pbkdf2+sha256",
             PasswordHashAlgo::Pbkdf2Sha512 => "pbkdf2+sha512",
+        }
+    }
+
+    /// Parse the given `&str` into a PasswordHashAlgo.
+    ///
+    /// The given string must be one of the strings listed in the Weechat Relay
+    /// [handshake docs](https://weechat.org/files/doc/devel/weechat_relay_protocol.en.html#command_handshake),
+    /// else this will return `None`.
+    pub fn parse(algo: &str) -> Option<PasswordHashAlgo> {
+        match algo {
+            "plain" => Some(PasswordHashAlgo::Plain),
+            "sha256" => Some(PasswordHashAlgo::Sha256),
+            "sha512" => Some(PasswordHashAlgo::Sha512),
+            "pbkdf2+sha256" => Some(PasswordHashAlgo::Pbkdf2Sha256),
+            "pbkdf2+sha512" => Some(PasswordHashAlgo::Pbkdf2Sha512),
+            _ => None,
         }
     }
 }

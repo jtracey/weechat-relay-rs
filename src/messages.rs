@@ -52,6 +52,10 @@ impl WString {
         Self { bytes }
     }
 
+    pub fn from_ref(bytes: &[u8]) -> Self {
+        Self::new(Some(bytes.to_vec()))
+    }
+
     /// Get the bytes representing this string.
     pub fn bytes(&self) -> &Option<Vec<u8>> {
         &self.bytes
