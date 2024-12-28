@@ -17,7 +17,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Lint
-      run: cargo clippy --workspace --tests -D warnings
+      run: cargo clippy --workspace --tests -- -D warnings
     - name: Build
       run: cargo build --verbose
     - name: Run Rust tests
