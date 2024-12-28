@@ -16,7 +16,13 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+    - name: Lint
+      run: cargo clippy --workspace --tests -D warnings
     - name: Build
       run: cargo build --verbose
-    - name: Run tests
+    - name: Run Rust tests
       run: cargo test --verbose
+    - name: Install weechat
+      run: sudo apt-get install -y weechat-headless
+    - name: Run integration test
+      run: tests/test.sh

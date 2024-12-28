@@ -1,0 +1,16 @@
+()
+chr: 65
+int: 123456
+int: -123456
+lon: 1234567890
+lon: -1234567890
+str: "a string"
+str: ""
+str: None
+buf: Some([98, 117, 102, 102, 101, 114])
+buf: None
+ptr: 0x1234abcd
+ptr: 0x0
+tim: 1321993456
+arr: [ str: "abc", str: "de", ]
+arr: [ int: 123, int: 456, int: 789, ]
