@@ -2,7 +2,7 @@
 name = "weechat-relay-rs"
 description = "A library for interfacing with the WeeChat Relay protocol"
 repository = "https://github.com/jtracey/weechat-relay-rs"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Justin Tracey"]
 license = "MIT OR Apache-2.0"
 edition = "2021"
