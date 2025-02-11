@@ -15,6 +15,8 @@ use std::io::Write;
 use std::net::TcpStream;
 use std::string::String;
 
+type NomError = nom::error::Error<Vec<u8>>;
+
 #[derive(Debug)]
 pub enum WeechatError {
     /// The client attempted to send an argument with a newline in an unescaped connection.
@@ -22,7 +24,7 @@ pub enum WeechatError {
     /// An IO error on the TCP stream.
     IOError(std::io::Error),
     /// An error was encountered in the structure of incoming messages.
-    ParserError(ParseMessageError<nom::error::VerboseError<Vec<u8>>>),
+    ParserError(ParseMessageError<NomError>),
     /// The server returned a valid message, but not one we expected.
     UnexpectedResponse(String),
     /// The handshake failed to negotiate viable parameters.
@@ -49,8 +51,8 @@ impl From<std::io::Error> for WeechatError {
     }
 }
 
-impl From<ParseMessageError<nom::error::VerboseError<Vec<u8>>>> for WeechatError {
-    fn from(error: ParseMessageError<nom::error::VerboseError<Vec<u8>>>) -> Self {
+impl From<ParseMessageError<NomError>> for WeechatError {
+    fn from(error: ParseMessageError<NomError>) -> Self {
         Self::ParserError(error)
     }
 }
@@ -106,12 +108,11 @@ impl Connection {
         stream.write_all(&Vec::<u8>::from(handshake.to_string()))?;
         stream.flush()?;
 
-        let messages::Object::Htb(response) =
-            message_parser::get_message_verbose_errors(&mut stream)?
-                .objects
-                .into_iter()
-                .next()
-                .expect("shouldn't return without a response")
+        let messages::Object::Htb(response) = message_parser::get_message::<NomError>(&mut stream)?
+            .objects
+            .into_iter()
+            .next()
+            .expect("shouldn't return without a response")
         else {
             return Err(WeechatError::UnexpectedResponse(
                 "non-htb handshake".to_string(),
@@ -235,10 +236,8 @@ impl Connection {
     }
 
     /// Get a response on the `Connection`.
-    pub fn get_message(
-        &mut self,
-    ) -> Result<Message, ParseMessageError<nom::error::VerboseError<Vec<u8>>>> {
-        message_parser::get_message_verbose_errors(&mut self.stream)
+    pub fn get_message(&mut self) -> Result<Message, ParseMessageError<NomError>> {
+        message_parser::get_message::<NomError>(&mut self.stream)
     }
 }
 

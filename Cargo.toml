@@ -10,7 +10,7 @@ edition = "2021"
 [dependencies]
 atty = { version = "0.2", optional = true }
 clap = { version = "4.4", features = ["derive"], optional = true }
-nom = "7.1"
+nom = "8.0"
 
 [features]
 cli = ["atty", "clap"]

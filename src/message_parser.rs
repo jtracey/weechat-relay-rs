@@ -9,10 +9,7 @@ use nom::combinator::{fail, rest};
 use nom::error::{context, ContextError, ParseError};
 use nom::number::complete::{be_i32, be_i8, be_u32, be_u8};
 use nom::sequence::separated_pair;
-use nom::IResult;
-use nom::InputIter;
-use nom::InputTakeAtPosition;
-use nom::ParseTo;
+use nom::{IResult, Input, ParseTo, Parser};
 
 use std::io::Read;
 use std::net::TcpStream;
@@ -57,7 +54,6 @@ macro_rules! parser_for {
 }
 
 #[derive(Debug)]
-#[non_exhaustive]
 pub enum ParseMessageError<E> {
     Network(String, std::io::Error),
     Parser(nom::Err<E>),
@@ -74,7 +70,7 @@ impl<E: std::fmt::Debug> std::fmt::Display for ParseMessageError<E> {
 
 impl<E: std::fmt::Debug> std::error::Error for ParseMessageError<E> {}
 
-pub fn get_message(
+pub fn get_message<E: ParseError<Vec<u8>> + ContextError<Vec<u8>>>(
     stream: &mut TcpStream,
 ) -> Result<Message, ParseMessageError<nom::error::Error<Vec<u8>>>> {
     let mut message_size = vec![0u8; 4];
@@ -109,71 +105,11 @@ pub fn get_message(
     Ok(message)
 }
 
-pub fn get_message_verbose_errors(
-    stream: &mut TcpStream,
-) -> Result<Message, ParseMessageError<nom::error::VerboseError<Vec<u8>>>> {
-    let mut message_size = vec![0u8; 4];
-    stream
-        .read_exact(&mut message_size)
-        .map_err(|e| ParseMessageError::Network("failed to read message size".to_string(), e))?;
-    let size_as_slice: &[u8] = &message_size;
-    let res: Result<(_, _), nom::Err<nom::error::VerboseError<Vec<u8>>>> =
-        be_u32::<_, _>(size_as_slice).map_err(|e: nom::Err<nom::error::VerboseError<&[u8]>>| {
-            e.map(|e2| nom::error::VerboseError {
-                errors: e2
-                    .errors
-                    .into_iter()
-                    .map(|e3| (e3.0.to_owned(), e3.1))
-                    .collect(),
-            })
-        });
-    let (i, message_size) = match res {
-        Ok(m) => m,
-        Err(e) => {
-            return Err(ParseMessageError::Parser(e));
-        }
-    };
-    debug_assert!(i.is_empty());
-
-    let mut message = vec![0u8; message_size as usize - 4];
-    stream
-        .read_exact(&mut message)
-        .map_err(|e| ParseMessageError::Network("failed to read message body".to_string(), e))?;
-    let message_as_slice: &[u8] = &message;
-    let res = parse_message::<_, _>(message_as_slice).map_err(
-        |e: nom::Err<nom::error::VerboseError<&[u8]>>| {
-            e.map(|e2| nom::error::VerboseError {
-                errors: e2
-                    .errors
-                    .into_iter()
-                    .map(|e3| (e3.0.to_owned(), e3.1))
-                    .collect(),
-            })
-        },
-    );
-    let (i, message) = match res {
-        Ok(m) => m,
-        Err(e) => {
-            return Err(ParseMessageError::Parser(e));
-        }
-    };
-    debug_assert!(i.is_empty());
-    Ok(message)
-}
-
 pub fn parse_message<I, E>(i: I) -> IResult<I, Message, E>
 where
     E: ParseError<I> + ContextError<I>,
-    I: Clone
-        + PartialEq
-        + InputIter<Item = u8>
-        + nom::InputLength
-        + nom::Slice<std::ops::RangeFrom<usize>>
-        + nom::InputTake
-        + nom::AsBytes
-        + std::fmt::Debug
-        + nom::InputTakeAtPosition,
-    <I as InputTakeAtPosition>::Item: PartialEq<u8>,
+    I: Clone + PartialEq + Input<Item = u8> + nom::AsBytes + std::fmt::Debug,
+    <I as Input>::Item: PartialEq<u8>,
 {
     context("message", |i: I| {
         let (i, compression) = parse_compression(i)?;
@@ -197,48 +133,42 @@ where
 
         let message = Message::new(id, objects);
         Ok((i, message))
-    })(i)
+    })
+    .parse(i)
 }
 
 fn parse_compression<I, E>(i: I) -> IResult<I, Compression, E>
 where
     E: ParseError<I> + ContextError<I>,
-    I: Clone + InputIter<Item = u8> + nom::InputLength + nom::Slice<std::ops::RangeFrom<usize>>,
+    I: Clone + Input<Item = u8>,
 {
-    let (i, flag) = context("compression byte", be_u8)(i)?;
+    let (i, flag) = context("compression byte", be_u8).parse(i)?;
     match flag {
         0 => Ok((i, Compression::Off)),
-        _ => context("compression unsupported", fail)(i), // FIXME
+        _ => context("compression unsupported", fail()).parse(i), // FIXME
     }
 }
 
 fn parse_length<I, E>(i: I) -> IResult<I, Option<usize>, E>
 where
     E: ParseError<I> + ContextError<I>,
-    I: Clone
-        + InputIter<Item = u8>
-        + nom::InputLength
-        + nom::Slice<std::ops::RangeFrom<usize>>
-        + nom::InputTake,
+    I: Clone + Input<Item = u8>,
 {
     context("length", |i| {
         let (i, length) = be_i32(i)?;
         match length {
             0.. => Ok((i, Some(length as usize))),
             -1 => Ok((i, None)),
-            _ => fail(i),
+            _ => fail().parse(i),
         }
-    })(i)
+    })
+    .parse(i)
 }
 
 fn parse_buffer<I, E>(i: I) -> IResult<I, Option<I>, E>
 where
     E: ParseError<I> + ContextError<I>,
-    I: Clone
-        + InputIter<Item = u8>
-        + nom::InputLength
-        + nom::Slice<std::ops::RangeFrom<usize>>
-        + nom::InputTake,
+    I: Clone + Input<Item = u8>,
 {
     context("buffer", |i| {
         let (i, length) = parse_length(i)?;
@@ -248,50 +178,38 @@ where
         } else {
             Ok((i, None))
         }
-    })(i)
+    })
+    .parse(i)
 }
 
 fn parse_wbuffer<I, E>(i: I) -> IResult<I, WBuffer, E>
 where
     E: ParseError<I> + ContextError<I>,
-    I: Clone
-        + InputIter<Item = u8>
-        + nom::InputLength
-        + nom::Slice<std::ops::RangeFrom<usize>>
-        + nom::InputTake
-        + nom::AsBytes,
+    I: Clone + Input<Item = u8> + nom::AsBytes,
 {
     context("wbuffer", |i: I| {
         let (i, buf) = parse_buffer(i)?;
         Ok((i, buf.map(|b| b.as_bytes().to_vec())))
-    })(i)
+    })
+    .parse(i)
 }
 
 fn parse_string<I, E>(i: I) -> IResult<I, WString, E>
 where
     E: ParseError<I> + ContextError<I>,
-    I: Clone
-        + InputIter<Item = u8>
-        + nom::InputLength
-        + nom::Slice<std::ops::RangeFrom<usize>>
-        + nom::InputTake
-        + nom::AsBytes,
+    I: Clone + Input<Item = u8> + nom::AsBytes,
 {
     context("string", |i: I| {
         let (i, buf) = parse_wbuffer(i)?;
         Ok((i, WString::new(buf)))
-    })(i)
+    })
+    .parse(i)
 }
 
 fn parse_identifier<I, E>(i: I) -> IResult<I, Identifier, E>
 where
     E: ParseError<I> + ContextError<I>,
-    I: Clone
-        + InputIter<Item = u8>
-        + nom::InputLength
-        + nom::Slice<std::ops::RangeFrom<usize>>
-        + nom::InputTake
-        + nom::AsBytes,
+    I: Clone + Input<Item = u8> + nom::AsBytes,
 {
     context("identifier", |i: I| {
         let (i, id) = parse_buffer(i)?;
@@ -335,13 +253,14 @@ where
             Identifier::Client(id.to_vec())
         };
         Ok((i, id))
-    })(i)
+    })
+    .parse(i)
 }
 
 fn parse_type<I, E>(i: I) -> IResult<I, ObjectType, E>
 where
     E: ParseError<I> + ContextError<I>,
-    I: Clone + InputIter + nom::InputTake + nom::InputLength + nom::AsBytes,
+    I: Clone + Input + nom::AsBytes,
 {
     context("identifier", |i: I| {
         let (i, type_bytes) = take(3usize)(i)?;
@@ -359,10 +278,11 @@ where
             b"inf" => ObjectType::Inf,
             b"inl" => ObjectType::Inl,
             b"arr" => ObjectType::Arr,
-            _ => return fail(i),
+            _ => return fail().parse(i),
         };
         Ok((i, message_type))
-    })(i)
+    })
+    .parse(i)
 }
 
 // to ensure the type and parser match
@@ -382,15 +302,8 @@ macro_rules! object_parsers {
 fn object_parser<I, E>(object_type: &ObjectType) -> impl Fn(I) -> IResult<I, Object, E>
 where
     E: ParseError<I> + ContextError<I>,
-    I: Clone
-        + PartialEq
-        + InputIter<Item = u8>
-        + nom::InputLength
-        + nom::Slice<std::ops::RangeFrom<usize>>
-        + nom::InputTake
-        + nom::AsBytes
-        + nom::InputTakeAtPosition,
-    <I as InputTakeAtPosition>::Item: PartialEq<u8>,
+    I: Clone + PartialEq + Input<Item = u8> + nom::AsBytes,
+    <I as Input>::Item: PartialEq<u8>,
 {
     object_parsers!(
         object_type,
@@ -412,12 +325,7 @@ where
 fn parse_long<I, E>(i: I) -> IResult<I, i64, E>
 where
     E: ParseError<I> + ContextError<I>,
-    I: Clone
-        + InputIter<Item = u8>
-        + nom::InputLength
-        + nom::Slice<std::ops::RangeFrom<usize>>
-        + nom::InputTake
-        + nom::AsBytes,
+    I: Clone + Input<Item = u8> + nom::AsBytes,
 {
     context("long", |i: I| {
         let (i, len) = be_u8(i)?;
@@ -426,43 +334,34 @@ where
         if let Some(int) = int {
             Ok((i, int))
         } else {
-            fail(i)
+            fail().parse(i)
         }
-    })(i)
+    })
+    .parse(i)
 }
 
 fn parse_pointer<I, E>(i: I) -> IResult<I, Pointer, E>
 where
     E: ParseError<I> + ContextError<I>,
-    I: Clone
-        + InputIter<Item = u8>
-        + nom::InputLength
-        + nom::Slice<std::ops::RangeFrom<usize>>
-        + nom::InputTake
-        + nom::AsBytes,
+    I: Clone + Input<Item = u8> + nom::AsBytes,
 {
     context("pointer", |i: I| {
         let (i, len) = be_u8(i)?;
         let (i, buf) = take(len)(i)?;
         let pointer = Pointer::new(buf.as_bytes().to_vec());
-        let pointer = if let Ok(pointer) = pointer {
-            pointer
+        if let Ok(pointer) = pointer {
+            Ok((i, pointer))
         } else {
-            return fail(i);
-        };
-        Ok((i, pointer))
-    })(i)
+            fail().parse(i)
+        }
+    })
+    .parse(i)
 }
 
 fn parse_time<I, E>(i: I) -> IResult<I, u64, E>
 where
     E: ParseError<I> + ContextError<I>,
-    I: Clone
-        + InputIter<Item = u8>
-        + nom::InputLength
-        + nom::Slice<std::ops::RangeFrom<usize>>
-        + nom::InputTake
-        + nom::AsBytes,
+    I: Clone + Input<Item = u8> + nom::AsBytes,
 {
     context("time", |i: I| {
         let (i, len) = be_u8(i)?;
@@ -471,9 +370,10 @@ where
         if let Some(tim) = int {
             Ok((i, tim))
         } else {
-            fail(i)
+            fail().parse(i)
         }
-    })(i)
+    })
+    .parse(i)
 }
 
 /*
@@ -498,11 +398,7 @@ fn apply_hashtable_parsers<I, E, M, N>(
 ) -> IResult<I, Vec<(M, N)>, E>
 where
     E: ParseError<I>,
-    I: Clone
-        + PartialEq
-        + InputIter<Item = u8>
-        + nom::InputLength
-        + nom::Slice<std::ops::RangeFrom<usize>>,
+    I: Clone + PartialEq + Input<Item = u8>,
 {
     let (i, count) = be_u32(i)?;
     let count = count as usize;
@@ -513,7 +409,8 @@ where
             Ok((i, (key, val)))
         },
         count,
-    )(i)
+    )
+    .parse(i)
 }
 
 fn pairs_to_hashtable<M, N>(pairs: Vec<(M, N)>) -> WHashtable
@@ -535,11 +432,7 @@ fn apply_and_gen_hashtable<J, M, N, E>(
 ) -> IResult<J, WHashtable, E>
 where
     E: ParseError<J> + ContextError<J>,
-    J: Clone
-        + PartialEq
-        + InputIter<Item = u8>
-        + nom::InputLength
-        + nom::Slice<std::ops::RangeFrom<usize>>,
+    J: Clone + PartialEq + Input<Item = u8>,
     M: MessageType + Clone,
     N: MessageType + Clone,
 {
@@ -575,15 +468,8 @@ macro_rules! parse_hashtable_match_key {
 fn parse_hashtable<I, E>(i: I) -> IResult<I, WHashtable, E>
 where
     E: ParseError<I> + ContextError<I>,
-    I: Clone
-        + PartialEq
-        + InputIter<Item = u8>
-        + nom::InputLength
-        + nom::Slice<std::ops::RangeFrom<usize>>
-        + nom::InputTake
-        + nom::AsBytes
-        + nom::InputTakeAtPosition,
-    <I as InputTakeAtPosition>::Item: PartialEq<u8>,
+    I: Clone + PartialEq + Input<Item = u8> + nom::AsBytes,
+    <I as Input>::Item: PartialEq<u8>,
 {
     context("hashtable", |i: I| {
         let (i, type_keys) = parse_type(i)?;
@@ -592,7 +478,8 @@ where
         parse_hashtable_match_key!(
             i, type_keys, type_vals, Chr, Int, Lon, Str, Buf, Ptr, Tim, Htb, Hda, Inf, Inl, Arr
         )
-    })(i)
+    })
+    .parse(i)
 }
 
 macro_rules! parse_and_pusher {
@@ -600,7 +487,7 @@ macro_rules! parse_and_pusher {
         match $warr {
             $(
                 WArray::$possible_type(v) => {
-                    let (i, r) = parser_for!($possible_type)($i)?;
+                    let (i, r) = parser_for!($possible_type).parse($i)?;
                     Ok((i, v.push(r)))
                 },
             )*
@@ -611,15 +498,8 @@ macro_rules! parse_and_pusher {
 fn parse_and_push<I, E>(i: I, a: &mut WArray) -> IResult<I, (), E>
 where
     E: ParseError<I> + ContextError<I>,
-    I: Clone
-        + PartialEq
-        + InputIter<Item = u8>
-        + nom::InputLength
-        + nom::Slice<std::ops::RangeFrom<usize>>
-        + nom::InputTake
-        + nom::AsBytes
-        + nom::InputTakeAtPosition,
-    <I as InputTakeAtPosition>::Item: PartialEq<u8>,
+    I: Clone + PartialEq + Input<Item = u8> + nom::AsBytes,
+    <I as Input>::Item: PartialEq<u8>,
 {
     parse_and_pusher!(i, a, Chr, Int, Lon, Str, Buf, Ptr, Tim, Htb, Hda, Inf, Inl, Arr)
 }
@@ -627,15 +507,8 @@ where
 fn parse_hdata<I, E>(i: I) -> IResult<I, GenericHdata, E>
 where
     E: ParseError<I> + ContextError<I>,
-    I: Clone
-        + PartialEq
-        + InputIter<Item = u8>
-        + nom::InputLength
-        + nom::Slice<std::ops::RangeFrom<usize>>
-        + nom::InputTake
-        + nom::AsBytes
-        + nom::InputTakeAtPosition,
-    <I as InputTakeAtPosition>::Item: PartialEq<u8>,
+    I: Clone + PartialEq + Input<Item = u8> + nom::AsBytes,
+    <I as Input>::Item: PartialEq<u8>,
 {
     context("hdata", |i: I| {
         let (i, hpath) = parse_string(i)?;
@@ -648,7 +521,9 @@ where
             0
         };
         let key_pairs = if let Some(raw_keys) = raw_keys {
-            nom::multi::separated_list0(take(1_usize), take_till(|c| c == b','))(raw_keys)?.1
+            nom::multi::separated_list0(take(1_usize), take_till(|c| c == b','))
+                .parse(raw_keys)?
+                .1
         } else {
             vec![]
         };
@@ -656,11 +531,7 @@ where
 
         let mut key_data = key_pairs
             .into_iter()
-            .map(separated_pair(
-                take_till(|c| c == b':'),
-                take(1_usize),
-                rest,
-            ))
+            .map(|i| separated_pair(take_till(|c| c == b':'), take(1_usize), rest).parse(i))
             .map(|r| {
                 r.and_then(|(_, (k, t))| {
                     let t = parse_type(t)?.1;
@@ -673,7 +544,7 @@ where
         let mut i = i;
         for _ in 0..count {
             let ppath;
-            (i, ppath) = nom::multi::count(parse_pointer, path_depth)(i)?;
+            (i, ppath) = nom::multi::count(parse_pointer, path_depth).parse(i)?;
             ppaths.push(ppath);
             for k in key_data.iter_mut() {
                 (i, _) = parse_and_push(i, &mut k.1)?;
@@ -696,106 +567,78 @@ where
                 set_values,
             },
         ))
-    })(i)
+    })
+    .parse(i)
 }
 
 fn parse_info<I, E>(i: I) -> IResult<I, WInfo, E>
 where
     E: ParseError<I> + ContextError<I>,
-    I: Clone
-        + PartialEq
-        + InputIter<Item = u8>
-        + nom::InputLength
-        + nom::Slice<std::ops::RangeFrom<usize>>
-        + nom::InputTake
-        + nom::AsBytes,
+    I: Clone + PartialEq + Input<Item = u8> + nom::AsBytes,
 {
     context("info", |i: I| {
         let (i, name) = parse_string(i)?;
         let (i, value) = parse_string(i)?;
         Ok((i, WInfo { name, value }))
-    })(i)
+    })
+    .parse(i)
 }
 
 fn parse_infolist_variable<I, E>(i: I) -> IResult<I, InfolistVariable, E>
 where
     E: ParseError<I> + ContextError<I>,
-    I: Clone
-        + PartialEq
-        + InputIter<Item = u8>
-        + nom::InputLength
-        + nom::Slice<std::ops::RangeFrom<usize>>
-        + nom::InputTake
-        + nom::AsBytes
-        + nom::InputTakeAtPosition,
-    <I as InputTakeAtPosition>::Item: PartialEq<u8>,
+    I: Clone + PartialEq + Input<Item = u8> + nom::AsBytes,
+    <I as Input>::Item: PartialEq<u8>,
 {
     context("infolist variable", |i: I| {
         let (i, name) = parse_string(i)?;
         let (i, value_type) = parse_type(i)?;
         let (i, value) = object_parser(&value_type)(i)?;
         Ok((i, InfolistVariable { name, value }))
-    })(i)
+    })
+    .parse(i)
 }
 
 fn parse_infolist_item<I, E>(i: I) -> IResult<I, InfolistItem, E>
 where
     E: ParseError<I> + ContextError<I>,
-    I: Clone
-        + PartialEq
-        + InputIter<Item = u8>
-        + nom::InputLength
-        + nom::Slice<std::ops::RangeFrom<usize>>
-        + nom::InputTake
-        + nom::AsBytes
-        + nom::InputTakeAtPosition,
-    <I as InputTakeAtPosition>::Item: PartialEq<u8>,
+    I: Clone + PartialEq + Input<Item = u8> + nom::AsBytes,
+    <I as Input>::Item: PartialEq<u8>,
 {
     context("infolist item", |i: I| {
         let (i, count) = be_u32(i)?;
         let count = count as usize;
-        let (i, variables) = nom::multi::count(parse_infolist_variable, count)(i)?;
+        let (i, variables) = nom::multi::count(parse_infolist_variable, count).parse(i)?;
         Ok((i, InfolistItem { variables }))
-    })(i)
+    })
+    .parse(i)
 }
 
 fn parse_infolist<I, E>(i: I) -> IResult<I, WInfolist, E>
 where
     E: ParseError<I> + ContextError<I>,
-    I: Clone
-        + PartialEq
-        + InputIter<Item = u8>
-        + nom::InputLength
-        + nom::Slice<std::ops::RangeFrom<usize>>
-        + nom::InputTake
-        + nom::AsBytes
-        + nom::InputTakeAtPosition,
-    <I as InputTakeAtPosition>::Item: PartialEq<u8>,
+    I: Clone + PartialEq + Input<Item = u8> + nom::AsBytes,
+    <I as Input>::Item: PartialEq<u8>,
 {
     context("infolist", |i: I| {
         let (i, name) = parse_string(i)?;
         let (i, count) = be_u32(i)?;
         let count = count as usize;
-        let (i, items) = nom::multi::count(parse_infolist_item, count)(i)?;
+        let (i, items) = nom::multi::count(parse_infolist_item, count).parse(i)?;
         Ok((i, WInfolist { name, items }))
-    })(i)
+    })
+    .parse(i)
 }
 
 fn parse_array_with<I, E, M>(i: I, parser: impl Fn(I) -> IResult<I, M, E>) -> IResult<I, WArray, E>
 where
     E: ParseError<I>,
-    I: Clone
-        + PartialEq
-        + InputIter<Item = u8>
-        + nom::InputLength
-        + nom::Slice<std::ops::RangeFrom<usize>>
-        + nom::InputTake
-        + nom::AsBytes,
+    I: Clone + PartialEq + Input<Item = u8> + nom::AsBytes,
     M: MessageType + Clone,
 {
     let (i, count) = be_u32(i)?;
     let count = count as usize;
-    let (i, res) = nom::multi::count(parser, count)(i)?;
+    let (i, res) = nom::multi::count(parser, count).parse(i)?;
     Ok((i, MessageType::to_warray(res)))
 }
 
@@ -813,20 +656,14 @@ macro_rules! parse_array_for {
 fn parse_array<I, E>(i: I) -> IResult<I, WArray, E>
 where
     E: ParseError<I> + ContextError<I>,
-    I: Clone
-        + PartialEq
-        + InputIter<Item = u8>
-        + nom::InputLength
-        + nom::Slice<std::ops::RangeFrom<usize>>
-        + nom::InputTake
-        + nom::AsBytes
-        + nom::InputTakeAtPosition,
-    <I as InputTakeAtPosition>::Item: PartialEq<u8>,
+    I: Clone + PartialEq + Input<Item = u8> + nom::AsBytes,
+    <I as Input>::Item: PartialEq<u8>,
 {
     context("array", |i: I| {
         let (i, item_type) = parse_type(i)?;
         parse_array_for!(i, item_type, Chr, Int, Lon, Str, Buf, Ptr, Tim, Htb, Hda, Inf, Inl, Arr)
-    })(i)
+    })
+    .parse(i)
 }
 
 #[cfg(test)]
@@ -836,7 +673,7 @@ mod tests {
     #[test]
     fn chr_parsing() {
         let bytes = [b'A'];
-        let res: IResult<_, _> = parser_for!(Chr)(&bytes[..]);
+        let res: IResult<_, _> = parser_for!(Chr).parse(&bytes[..]);
         let c = res.unwrap().1;
         assert_eq!(c, b'A' as i8);
     }
@@ -844,7 +681,7 @@ mod tests {
     #[test]
     fn int_parsing() {
         let bytes = [0x00, 0x01, 0xE2, 0x40];
-        let res: IResult<_, _> = parser_for!(Int)(&bytes[..]);
+        let res: IResult<_, _> = parser_for!(Int).parse(&bytes[..]);
         let i = res.unwrap().1;
         assert_eq!(i, 123456);
 
