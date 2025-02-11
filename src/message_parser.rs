@@ -585,7 +585,7 @@ where
         + nom::InputTakeAtPosition,
     <I as InputTakeAtPosition>::Item: PartialEq<u8>,
 {
-    context("time", |i: I| {
+    context("hashtable", |i: I| {
         let (i, type_keys) = parse_type(i)?;
         let (i, type_vals) = parse_type(i)?;
 
