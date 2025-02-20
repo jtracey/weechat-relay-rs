@@ -515,7 +515,7 @@ where
         let (i, raw_keys) = parse_buffer(i)?;
         let (i, count) = be_u32(i)?;
 
-        let path_depth = if let Some(ref hpath) = hpath.bytes() {
+        let path_depth = if let Some(hpath) = hpath.bytes() {
             hpath.iter().filter(|&b| *b == b'/').count() + 1
         } else {
             0
