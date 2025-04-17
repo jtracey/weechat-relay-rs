@@ -2,10 +2,13 @@
 name = "weechat-relay-rs"
 description = "A library for interfacing with the WeeChat Relay protocol"
 repository = "https://github.com/jtracey/weechat-relay-rs"
-version = "0.3.0"
+version = "0.3.1-alpha"
 authors = ["Justin Tracey"]
 license = "MIT OR Apache-2.0"
 edition = "2021"
+documentation = "https://docs.rs/weechat-relay-rs/latest/weechat_relay_rs/"
+readme = "README.md"
+categories = ["api-bindings", "command-line-utilities", "network-programming", "parsing"]
 
 [dependencies]
 atty = { version = "0.2", optional = true }
